@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { fetchBoosterPack, PackSimulationError } from './api/scryfall';
-import type { BoosterPack } from './api/scryfall';
+import type { BoosterPack, BoosterType } from './api/scryfall';
 import { CardGrid } from './components/CardGrid';
 import { SetSelector } from './components/SetSelector';
+import { BoosterTypeSelector } from './components/BoosterTypeSelector';
 
 function App() {
   const [selectedSet, setSelectedSet] = useState<string>('');
+  const [boosterType, setBoosterType] = useState<BoosterType>('play');
   const [pack, setPack] = useState<BoosterPack | null>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<string>('');
@@ -17,11 +19,11 @@ function App() {
     setLoading(true);
     setError(null);
     setPack(null);
-    setProgress('Opening pack...');
+    setProgress(`Opening ${boosterType} booster...`);
 
     try {
       setProgress('Fetching cards...');
-      const fetchedPack = await fetchBoosterPack(selectedSet);
+      const fetchedPack = await fetchBoosterPack(selectedSet, boosterType);
       setProgress('');
       setPack(fetchedPack);
     } catch (err) {
@@ -40,6 +42,10 @@ function App() {
     }
   };
 
+  const buttonGradient = boosterType === 'collector'
+    ? 'from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 hover:shadow-purple-500/25'
+    : 'from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 hover:shadow-amber-500/25';
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white">
       <div className="container mx-auto py-8 px-4 max-w-6xl">
@@ -52,17 +58,26 @@ function App() {
         </header>
 
         {/* Controls */}
-        <div className="flex flex-col sm:flex-row gap-4 items-end justify-center mb-10">
-          <SetSelector
-            selectedSet={selectedSet}
-            onSetChange={setSelectedSet}
-            disabled={loading}
-          />
+        <div className="flex flex-col gap-6 items-center justify-center mb-10">
+          {/* Top row: Set selector and booster type */}
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+            <SetSelector
+              selectedSet={selectedSet}
+              onSetChange={setSelectedSet}
+              disabled={loading}
+            />
+            <BoosterTypeSelector
+              selected={boosterType}
+              onChange={setBoosterType}
+              disabled={loading}
+            />
+          </div>
 
+          {/* Open button */}
           <button
             onClick={handleOpenPack}
             disabled={loading || !selectedSet}
-            className="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed text-black font-bold py-3 px-8 rounded-lg text-lg transition-all duration-200 shadow-lg hover:shadow-amber-500/25 cursor-pointer"
+            className={`bg-gradient-to-r ${buttonGradient} disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed text-black font-bold py-3 px-8 rounded-lg text-lg transition-all duration-200 shadow-lg cursor-pointer`}
           >
             {loading ? (
               <span className="flex items-center gap-2">
@@ -70,7 +85,7 @@ function App() {
                 Opening...
               </span>
             ) : (
-              'Open Booster Pack'
+              `Open ${boosterType === 'collector' ? '💎 Collector' : '📦 Play'} Booster`
             )}
           </button>
         </div>
@@ -96,7 +111,7 @@ function App() {
         {!pack && !loading && !error && (
           <div className="text-center text-gray-500 py-20">
             <div className="text-6xl mb-4">🎴</div>
-            <p>Select a set and click "Open Booster Pack" to get started!</p>
+            <p>Select a set and booster type, then click to open!</p>
           </div>
         )}
       </div>

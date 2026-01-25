@@ -63,7 +63,10 @@ export interface ScryfallCard {
   set_name: string;
   collector_number: string;
   prices: ScryfallPrices;
-  foil?: boolean; // We'll add this for tracking foils in pack
+
+  // Note: Scryfall returns 'foil' field = whether card EXISTS in foil
+  // We use 'isFoilPull' to track if THIS card was pulled as a foil
+  isFoilPull?: boolean;
 
   // Single-faced cards have image_uris
   image_uris?: ScryfallImageUris;
@@ -91,10 +94,10 @@ export function getCardImageUrl(card: ScryfallCard, size: keyof ScryfallImageUri
 }
 
 /**
- * Get the USD price of a card (foil price if card is foil)
+ * Get the USD price of a card (foil price if card is a foil pull)
  */
 export function getCardPrice(card: ScryfallCard): number | null {
-  const priceStr = card.foil ? card.prices.usd_foil : card.prices.usd;
+  const priceStr = card.isFoilPull ? card.prices.usd_foil : card.prices.usd;
   if (!priceStr) return null;
   return parseFloat(priceStr);
 }

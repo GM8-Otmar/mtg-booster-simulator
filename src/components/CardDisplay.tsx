@@ -30,7 +30,10 @@ export function CardDisplay({ card, showPrice = true }: CardDisplayProps) {
   const ringColor = rarityStyles[card.rarity] || 'ring-gray-500';
   const glowEffect = rarityGlow[card.rarity] || '';
   const price = getCardPrice(card);
-  const isFoil = card.foil;
+  const isFoil = card.isFoilPull === true;
+
+  // Debug logging
+  console.log(`Card: ${card.name} | Rarity: ${card.rarity} | Price: ${price} | Foil: ${isFoil}`);
 
   // Foil cards get a special rainbow border effect
   const foilStyle = isFoil
