@@ -81,6 +81,7 @@ export interface BoosterPack {
   commons: ScryfallCard[];
   uncommons: ScryfallCard[];
   rareOrMythic: ScryfallCard;
+  foilCard: ScryfallCard | null; // Random foil (replaces a common)
 }
 
 export class PackSimulationError extends Error {
@@ -134,14 +135,17 @@ async function fetchUniqueCards(
 
 /**
  * Simulate opening a booster pack from a specific set
- * Standard pack: 10 commons, 3 uncommons, 1 rare (or mythic ~1/8 chance)
+ * Standard pack: 10 commons (or 9 + foil), 3 uncommons, 1 rare/mythic
+ * ~33% chance of a foil replacing one common
  */
 export async function fetchBoosterPack(setCode: string): Promise<BoosterPack> {
   // Determine if we get a mythic (roughly 1 in 8 packs)
   const isMythic = Math.random() < 0.125;
 
-  // Try without is:booster first - some sets don't have booster-tagged cards
-  // Using just the set and rarity is more reliable
+  // Determine if we get a foil (~1 in 3 packs)
+  const hasFoil = Math.random() < 0.33;
+
+  // Build queries
   const commonQuery = `set:${setCode} rarity:common`;
   const uncommonQuery = `set:${setCode} rarity:uncommon`;
   let rareQuery = isMythic
@@ -150,7 +154,9 @@ export async function fetchBoosterPack(setCode: string): Promise<BoosterPack> {
 
   try {
     // Fetch unique cards for each rarity
-    const commons = await fetchUniqueCards(commonQuery, 10);
+    // If we have a foil, only get 9 commons (foil replaces 1)
+    const commonCount = hasFoil ? 9 : 10;
+    const commons = await fetchUniqueCards(commonQuery, commonCount);
     const uncommons = await fetchUniqueCards(uncommonQuery, 3);
 
     // Try to get rare/mythic, fall back to rare if no mythics exist
@@ -169,10 +175,40 @@ export async function fetchBoosterPack(setCode: string): Promise<BoosterPack> {
       );
     }
 
+    // Fetch foil card if we got one
+    // Foil can be any rarity - weighted towards common/uncommon
+    let foilCard: ScryfallCard | null = null;
+    if (hasFoil) {
+      const foilRarityRoll = Math.random();
+      let foilQuery: string;
+
+      if (foilRarityRoll < 0.70) {
+        // 70% common foil
+        foilQuery = `set:${setCode} rarity:common`;
+      } else if (foilRarityRoll < 0.92) {
+        // 22% uncommon foil
+        foilQuery = `set:${setCode} rarity:uncommon`;
+      } else if (foilRarityRoll < 0.99) {
+        // 7% rare foil
+        foilQuery = `set:${setCode} rarity:rare`;
+      } else {
+        // 1% mythic foil
+        foilQuery = `set:${setCode} rarity:mythic`;
+      }
+
+      foilCard = await fetchRandomCard(foilQuery);
+
+      // Mark it as foil
+      if (foilCard) {
+        foilCard = { ...foilCard, foil: true };
+      }
+    }
+
     return {
       commons,
       uncommons,
       rareOrMythic,
+      foilCard,
     };
   } catch (err) {
     if (err instanceof PackSimulationError) {
@@ -188,8 +224,12 @@ export async function fetchBoosterPack(setCode: string): Promise<BoosterPack> {
 
 /**
  * Get all cards from a booster pack as a flat array
- * Ordered: commons first, then uncommons, then rare/mythic (like opening a real pack)
+ * Ordered: commons first, then uncommons, then rare/mythic, then foil
  */
 export function getPackCards(pack: BoosterPack): ScryfallCard[] {
-  return [...pack.commons, ...pack.uncommons, pack.rareOrMythic];
+  const cards = [...pack.commons, ...pack.uncommons, pack.rareOrMythic];
+  if (pack.foilCard) {
+    cards.push(pack.foilCard);
+  }
+  return cards;
 }

@@ -43,6 +43,15 @@ export interface ScryfallCardFace {
   image_uris?: ScryfallImageUris;
 }
 
+export interface ScryfallPrices {
+  usd: string | null;
+  usd_foil: string | null;
+  usd_etched: string | null;
+  eur: string | null;
+  eur_foil: string | null;
+  tix: string | null;
+}
+
 export interface ScryfallCard {
   id: string;
   name: string;
@@ -53,6 +62,8 @@ export interface ScryfallCard {
   set: string;
   set_name: string;
   collector_number: string;
+  prices: ScryfallPrices;
+  foil?: boolean; // We'll add this for tracking foils in pack
 
   // Single-faced cards have image_uris
   image_uris?: ScryfallImageUris;
@@ -77,4 +88,21 @@ export function getCardImageUrl(card: ScryfallCard, size: keyof ScryfallImageUri
   }
 
   return null;
+}
+
+/**
+ * Get the USD price of a card (foil price if card is foil)
+ */
+export function getCardPrice(card: ScryfallCard): number | null {
+  const priceStr = card.foil ? card.prices.usd_foil : card.prices.usd;
+  if (!priceStr) return null;
+  return parseFloat(priceStr);
+}
+
+/**
+ * Format price as USD string
+ */
+export function formatPrice(price: number | null): string {
+  if (price === null) return '—';
+  return `$${price.toFixed(2)}`;
 }
