@@ -1,7 +1,30 @@
 /**
- * Scryfall Card API types
- * Docs: https://scryfall.com/docs/api/cards
+ * Scryfall API types
+ * Docs: https://scryfall.com/docs/api
  */
+
+// ============ SET TYPES ============
+
+export interface ScryfallSet {
+  id: string;
+  code: string;
+  name: string;
+  set_type: string;
+  released_at: string;
+  card_count: number;
+  digital: boolean;
+  icon_svg_uri: string;
+}
+
+// Set types that typically have booster packs
+export const BOOSTER_SET_TYPES = [
+  'core',
+  'expansion',
+  'draft_innovation',
+  'masters',
+] as const;
+
+// ============ CARD TYPES ============
 
 export interface ScryfallImageUris {
   small: string;
