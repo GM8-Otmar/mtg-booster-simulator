@@ -116,7 +116,7 @@ export default function LegendSelector() {
                   : 'hover:scale-105'
               }`}
             >
-              <CardDisplay card={legend} />
+              <CardDisplay card={legend} enableZoom={false} />
             </button>
           ))}
         </div>

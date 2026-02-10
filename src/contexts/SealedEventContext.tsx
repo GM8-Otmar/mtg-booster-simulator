@@ -77,8 +77,6 @@ export function SealedEventProvider({ children }: { children: React.ReactNode })
     } else if (event.status === 'in_progress') {
       if (currentPlayer.packsOpened < 6) {
         setPhase('opening');
-      } else if (!currentPlayer.selectedLegend) {
-        setPhase('selecting_legend');
       } else {
         setPhase('complete');
       }

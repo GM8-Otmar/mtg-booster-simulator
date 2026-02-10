@@ -44,6 +44,17 @@ function PlayBoosterGrid({ pack }: { pack: PlayBoosterPack }) {
         </div>
       </section>
 
+      {/* Land */}
+      <section>
+        <h2 className="text-lg font-semibold text-green-300 mb-4 flex items-center gap-2">
+          <span className="text-xl">🌿</span>
+          Land Slot
+        </h2>
+        <div className="flex justify-center">
+          <CardDisplay card={pack.land} />
+        </div>
+      </section>
+
       {/* Wildcard (if rare/mythic) */}
       {(pack.wildcard.rarity === 'rare' || pack.wildcard.rarity === 'mythic') && (
         <section>

@@ -7,12 +7,11 @@ import type { ScryfallCard } from '../types/card';
  * # [Commander Name]
  *
  * Deck
- * # [Card Name]
- * # [Card Name]
- * ...
+ * 4 [Card Name]
+ * 2 [Card Name]
  */
 export function generateArenaFormat(
-  pool: ScryfallCard[],
+  deckCards: ScryfallCard[],
   commander: ScryfallCard | null
 ): string {
   const lines: string[] = [];
@@ -27,10 +26,17 @@ export function generateArenaFormat(
   // Deck section
   lines.push('Deck');
 
-  // Add all cards from pool
-  pool.forEach((card) => {
-    lines.push(`# ${card.name}`);
+  // Aggregate by name for clean import format
+  const counts = new Map<string, number>();
+  deckCards.forEach((card) => {
+    counts.set(card.name, (counts.get(card.name) ?? 0) + 1);
   });
+
+  Array.from(counts.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([name, count]) => {
+      lines.push(`${count} ${name}`);
+    });
 
   return lines.join('\n');
 }

@@ -16,15 +16,32 @@ interface SetsResponse {
   data: ScryfallSet[];
 }
 
+const BOOSTER_SETS_CACHE_KEY = 'mtg-booster-sets-v1';
+const BOOSTER_SETS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
 export async function fetchSets(): Promise<ScryfallSet[]> {
   const response = await scryfallClient.get<SetsResponse>('/sets');
   return response.data.data;
 }
 
 export async function fetchBoosterSets(): Promise<ScryfallSet[]> {
+  if (typeof window !== 'undefined') {
+    const cachedRaw = window.localStorage.getItem(BOOSTER_SETS_CACHE_KEY);
+    if (cachedRaw) {
+      try {
+        const cached = JSON.parse(cachedRaw) as { timestamp: number; sets: ScryfallSet[] };
+        if (Date.now() - cached.timestamp < BOOSTER_SETS_CACHE_TTL_MS && Array.isArray(cached.sets)) {
+          return cached.sets;
+        }
+      } catch {
+        // Ignore cache parse errors and fetch fresh data.
+      }
+    }
+  }
+
   const allSets = await fetchSets();
 
-  return allSets
+  const boosterSets = allSets
     .filter((set) => {
       const isBoosterType = BOOSTER_SET_TYPES.includes(
         set.set_type as (typeof BOOSTER_SET_TYPES)[number]
@@ -37,6 +54,15 @@ export async function fetchBoosterSets(): Promise<ScryfallSet[]> {
     .sort((a, b) => {
       return new Date(b.released_at).getTime() - new Date(a.released_at).getTime();
     });
+
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(
+      BOOSTER_SETS_CACHE_KEY,
+      JSON.stringify({ timestamp: Date.now(), sets: boosterSets })
+    );
+  }
+
+  return boosterSets;
 }
 
 // ============ CARDS API ============
@@ -65,6 +91,7 @@ export interface PlayBoosterPack {
   uncommons: ScryfallCard[];      // Slots 8-10 (3 uncommons)
   wildcard: ScryfallCard;         // Slot 11 (non-foil, any rarity)
   rareOrMythic: ScryfallCard;     // Slot 12 (87.5% rare, 12.5% mythic)
+  land: ScryfallCard;             // Slot 13 (basic land)
   foilWildcard: ScryfallCard;     // Slot 14 (guaranteed foil, any rarity)
 }
 
@@ -79,13 +106,18 @@ export interface CollectorBoosterPack {
 export type BoosterPack = PlayBoosterPack | CollectorBoosterPack;
 
 export class PackSimulationError extends Error {
+  public readonly rarity: string;
+  public readonly setCode: string;
+
   constructor(
     message: string,
-    public readonly rarity: string,
-    public readonly setCode: string
+    rarity: string,
+    setCode: string
   ) {
     super(message);
     this.name = 'PackSimulationError';
+    this.rarity = rarity;
+    this.setCode = setCode;
   }
 }
 
@@ -147,6 +179,26 @@ function rollRarity(weights: { common?: number; uncommon?: number; rare?: number
   return 'mythic';
 }
 
+async function fetchLandSlot(setCode: string): Promise<ScryfallCard> {
+  const useFullArt = Math.random() < 0.1;
+  const fullArtQuery = `set:${setCode} type:basic is:fullart`;
+  const basicLandQuery = `set:${setCode} type:basic`;
+
+  let land = useFullArt ? await fetchRandomCard(fullArtQuery) : null;
+  if (!land) {
+    land = await fetchRandomCard(basicLandQuery);
+  }
+  if (!land) {
+    land = await fetchRandomCard('game:paper type:basic');
+  }
+
+  if (!land) {
+    throw new PackSimulationError('Failed to fetch land slot', 'land', setCode);
+  }
+
+  return land;
+}
+
 // ============ PLAY BOOSTER ============
 // Based on: https://mtg.fandom.com/wiki/Play_Booster
 // 14 cards: 7 commons, 3 uncommons, 1 wildcard (any), 1 rare/mythic, 1 land, 1 foil wildcard
@@ -185,6 +237,10 @@ export async function fetchPlayBooster(setCode: string): Promise<PlayBoosterPack
     if (!rareOrMythic) throw new PackSimulationError('No rare/mythic found', 'rare/mythic', setCode);
     console.log(`  Rare/Mythic: ${rareOrMythic.name} (${rareOrMythic.rarity}) ${isMythic ? '🌟 MYTHIC ROLL!' : ''}`);
 
+    // Slot 13: Basic land (10% full-art attempt)
+    const land = await fetchLandSlot(setCode);
+    console.log(`  Land: ${land.name}`);
+
     // Slot 14: Foil wildcard (guaranteed foil, any rarity)
     // Rates: ~60% common, ~25% uncommon, ~12% rare, ~3% mythic
     const foilRarity = rollRarity({ common: 0.60, uncommon: 0.25, rare: 0.12, mythic: 0.03 });
@@ -205,6 +261,7 @@ export async function fetchPlayBooster(setCode: string): Promise<PlayBoosterPack
       uncommons,
       wildcard,
       rareOrMythic,
+      land,
       foilWildcard,
     };
   } catch (err) {
@@ -304,6 +361,7 @@ export function getPackCards(pack: BoosterPack): ScryfallCard[] {
       ...pack.uncommons,
       pack.wildcard,
       pack.rareOrMythic,
+      pack.land,
       pack.foilWildcard,
     ];
   } else {

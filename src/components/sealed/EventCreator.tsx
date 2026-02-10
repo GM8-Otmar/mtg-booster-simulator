@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { SetSelector } from '../SetSelector';
 import { BoosterTypeSelector } from '../BoosterTypeSelector';
 import { useSealedEvent } from '../../contexts/SealedEventContext';

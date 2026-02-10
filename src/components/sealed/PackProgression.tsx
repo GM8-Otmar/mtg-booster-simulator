@@ -2,10 +2,14 @@ import { useState } from 'react';
 import { useSealedEvent } from '../../contexts/SealedEventContext';
 import { CardDisplay } from '../CardDisplay';
 import type { BoosterPack } from '../../types/sealed';
+import type { ScryfallCard } from '../../types/card';
+import CardInspectPanel from './CardInspectPanel';
 
 export default function PackProgression() {
   const { currentPlayer, openNextPack, loading, error } = useSealedEvent();
   const [currentPack, setCurrentPack] = useState<BoosterPack | null>(null);
+  const [inspectCard, setInspectCard] = useState<ScryfallCard | null>(null);
+  const [justAddedCount, setJustAddedCount] = useState<number | null>(null);
 
   if (!currentPlayer) return null;
 
@@ -13,13 +17,18 @@ export default function PackProgression() {
     try {
       const pack = await openNextPack();
       setCurrentPack(pack);
+      setInspectCard(pack.cards?.find(Boolean) ?? null);
+      setJustAddedCount(null);
     } catch (err) {
       console.error('Failed to open pack:', err);
     }
   };
 
   const handleContinue = () => {
+    const addedCount = currentPack?.cards?.filter(Boolean).length ?? 0;
+    setJustAddedCount(addedCount);
     setCurrentPack(null);
+    setInspectCard(null);
   };
 
   const packsOpened = currentPlayer.packsOpened;
@@ -51,22 +60,30 @@ export default function PackProgression() {
 
         {/* Pack Display or Open Button */}
         {currentPack ? (
-          <div>
-            {/* Simple grid display for cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
-              {currentPack.cards?.filter((card: any) => card != null).map((card: any, index: number) => (
-                <CardDisplay key={`${card.id}-${index}`} card={card} />
-              ))}
-            </div>
+          <div className="grid lg:grid-cols-[1fr,320px] gap-6 items-start">
+            <div>
+              <div className="bg-gray-800/70 border border-gray-700 rounded-lg p-3 mb-4 text-sm text-gray-300">
+                Hover cards to inspect details. When ready, click <span className="text-white font-semibold">Add to Pool</span>.
+              </div>
 
-            <div className="text-center mt-8">
-              <button
-                onClick={handleContinue}
-                className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl font-bold text-lg transition-all"
-              >
-                {packsOpened < 6 ? 'Add to Pool & Continue' : 'View Full Pool'}
-              </button>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
+                {currentPack.cards?.filter((card): card is ScryfallCard => card != null).map((card, index) => (
+                  <div key={`${card.id}-${index}`} onMouseEnter={() => setInspectCard(card)}>
+                    <CardDisplay card={card} />
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-center mt-8">
+                <button
+                  onClick={handleContinue}
+                  className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl font-bold text-lg transition-all"
+                >
+                  {packsOpened < 6 ? 'Add to Pool & Continue' : 'Add to Pool & Build Deck'}
+                </button>
+              </div>
             </div>
+            <CardInspectPanel card={inspectCard} title="Pack Inspect" />
           </div>
         ) : (
           <div className="max-w-md mx-auto">
@@ -89,6 +106,12 @@ export default function PackProgression() {
                 <p className="text-red-400 mt-4">{error}</p>
               )}
             </div>
+
+            {justAddedCount !== null && (
+              <div className="mt-4 bg-green-500/10 border border-green-500 rounded-lg p-3 text-center text-green-300">
+                Added {justAddedCount} cards to your pool.
+              </div>
+            )}
 
             {/* Pool Stats */}
             {packsOpened > 0 && (

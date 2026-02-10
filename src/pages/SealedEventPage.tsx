@@ -3,9 +3,7 @@ import { SealedEventProvider, useSealedEvent } from '../contexts/SealedEventCont
 import EventCreator from '../components/sealed/EventCreator';
 import EventJoin from '../components/sealed/EventJoin';
 import PackProgression from '../components/sealed/PackProgression';
-import LegendSelector from '../components/sealed/LegendSelector';
 import PoolView from '../components/sealed/PoolView';
-import DeckExporter from '../components/sealed/DeckExporter';
 
 function SealedEventContent() {
   const { phase, leaveEvent } = useSealedEvent();
@@ -63,10 +61,6 @@ function SealedEventContent() {
     return <PackProgression />;
   }
 
-  if (phase === 'selecting_legend') {
-    return <LegendSelector />;
-  }
-
   if (phase === 'complete') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-8">
@@ -82,10 +76,6 @@ function SealedEventContent() {
           </div>
 
           <PoolView />
-
-          <div className="mt-8">
-            <DeckExporter />
-          </div>
         </div>
       </div>
     );
