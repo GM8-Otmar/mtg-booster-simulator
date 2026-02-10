@@ -1,73 +1,222 @@
-# React + TypeScript + Vite
+# MTG Booster Simulator & Sealed Event Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A web application for simulating Magic: The Gathering booster pack openings and hosting sealed events with friends!
 
-Currently, two official plugins are available:
+## 🎴 Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### Random Pack Mode
+- Open Play Boosters or Collector Boosters from any set
+- Realistic card distributions and rarity rolls
+- Foil card detection with visual effects
+- Real-time pricing from Scryfall
+- Pack value calculations
 
-## React Compiler
+### Sealed Event Mode (NEW!)
+- **Host or Join Events**: Create events with shareable codes
+- **Multiplayer Support**: Play with friends on your local network
+- **6-Pack Sealed**: Open 6 packs to build your card pool
+- **Commander Selection**: Pick any legendary creature from the set
+- **Auto-Organized Pool**: Cards sorted by color and type
+- **Deck Export**: Export to MTG Arena format for untap.gg
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 🚀 Quick Start
 
-## Expanding the ESLint configuration
+### Installation
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Development (Two Terminals)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+**Terminal 1 - Backend:**
+```bash
+npm run dev:server
 ```
+
+**Terminal 2 - Frontend:**
+```bash
+npm run dev
+```
+
+Then open `http://localhost:5173` in your browser.
+
+### Share with Friends
+
+**Same WiFi (Local Network):**
+
+1. Find your local IP:
+   - **Windows**: `ipconfig` (look for IPv4 Address)
+   - **Mac/Linux**: `ifconfig` (look for inet)
+
+2. Share: `http://YOUR_IP:5173`
+
+Example: `http://192.168.1.100:5173`
+
+**Remote Play (Over Internet):**
+
+For friends NOT on your WiFi, use ngrok:
+
+```bash
+# Terminal 3: Start ngrok tunnel
+ngrok http 5173
+```
+
+Share the ngrok URL (e.g., `https://abc-xyz.ngrok-free.app`)
+
+📖 **[Full Remote Setup Guide](docs/REMOTE-SETUP.md)** - Step-by-step instructions for playing with remote friends
+
+## 📁 Project Structure
+
+```
+mtg-booster-simulator/
+├── server/                  # Backend (Express + Socket.io)
+│   ├── index.ts            # Server entry point
+│   ├── routes/             # API endpoints
+│   ├── services/           # Business logic
+│   └── types/              # TypeScript types
+│
+├── src/                    # Frontend (React + TypeScript)
+│   ├── components/         # Reusable UI components
+│   │   └── sealed/         # Sealed event components
+│   ├── pages/              # Main pages
+│   ├── contexts/           # React Context (state management)
+│   ├── api/                # API clients
+│   ├── utils/              # Helper functions
+│   └── types/              # TypeScript types
+│
+├── data/                   # Persistent storage
+│   └── events/             # Sealed event JSON files
+│
+└── public/                 # Static assets
+```
+
+## 🎮 How to Use
+
+### Random Pack Mode
+
+1. Select mode: **Random Pack Mode**
+2. Choose a Magic set
+3. Select booster type (Play or Collector)
+4. Click "Open Booster"
+5. View your cards with pricing!
+
+### Sealed Event Mode
+
+#### As Host:
+1. Select mode: **Sealed Event Mode**
+2. Click "Host Event"
+3. Enter your name and select a set
+4. Share the event code with friends
+5. Click "Start Event" when everyone has joined
+6. Open your 6 packs
+7. Select your commander
+8. View and export your deck
+
+#### As Player:
+1. Select mode: **Sealed Event Mode**
+2. Click "Join Event"
+3. Enter the event code from the host
+4. Wait for host to start
+5. Open your 6 packs
+6. Select your commander
+7. View and export your deck
+
+## 🛠️ Tech Stack
+
+**Frontend:**
+- React 19
+- TypeScript
+- Tailwind CSS
+- Socket.io Client
+- Axios
+
+**Backend:**
+- Node.js
+- Express
+- Socket.io (real-time events)
+- TypeScript
+- File-based storage (JSON)
+
+**API:**
+- Scryfall API (card data)
+
+## 📦 Available Scripts
+
+```bash
+# Development
+npm run dev              # Start frontend dev server
+npm run dev:server       # Start backend dev server
+
+# Production Build
+npm run build            # Build frontend
+npm run build:server     # Build backend
+npm run start            # Run production server
+
+# Other
+npm run lint             # Run ESLint
+npm run preview          # Preview production build
+```
+
+## 🎯 Use Cases
+
+- **Solo Fun**: Open random packs and see what you pull
+- **Sealed Events**: Draft with friends remotely
+- **Deck Testing**: Build sealed pools and export for testing
+- **Learning**: See realistic pack distributions
+- **Price Checking**: View real-time card prices
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Create a `.env` file (optional):
+
+```env
+VITE_API_URL=http://localhost:3001
+PORT=3001
+```
+
+### Backend Settings
+
+- **Event Cleanup**: Old events auto-delete after 24 hours
+- **Storage**: Events saved to `./data/events/`
+- **WebSocket**: Real-time updates for multiplayer
+
+## 📝 Data Persistence
+
+Sealed events are saved as JSON files in `data/events/`:
+- Events persist across server restarts
+- Players can rejoin events
+- Auto-cleanup prevents disk bloat
+
+## 🤝 Contributing
+
+This is a personal project, but feel free to fork and customize!
+
+### Potential Improvements
+
+- Draft mode (passing packs)
+- Deck builder UI (drag-and-drop)
+- Match tracking
+- Persistent user accounts
+- Cloud hosting option
+- Mobile app version
+
+## 📄 License
+
+This project uses data from the Scryfall API. Card images and data are property of Wizards of the Coast.
+
+## 🙏 Acknowledgments
+
+- [Scryfall](https://scryfall.com) for the amazing API
+- Wizards of the Coast for Magic: The Gathering
+- The MTG community for sealed format inspiration
+
+## ⚠️ Disclaimer
+
+This is a fan-made simulator for entertainment purposes. Not affiliated with or endorsed by Wizards of the Coast.
+
+---
+
+Built with ❤️ for Magic players everywhere

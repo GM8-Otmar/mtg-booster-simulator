@@ -62,6 +62,7 @@ export interface ScryfallCard {
   set: string;
   set_name: string;
   collector_number: string;
+  colors?: string[];  // Color identity: W, U, B, R, G
   prices: ScryfallPrices;
 
   // Note: Scryfall returns 'foil' field = whether card EXISTS in foil
@@ -96,7 +97,8 @@ export function getCardImageUrl(card: ScryfallCard, size: keyof ScryfallImageUri
 /**
  * Get the USD price of a card (foil price if card is a foil pull)
  */
-export function getCardPrice(card: ScryfallCard): number | null {
+export function getCardPrice(card: ScryfallCard | undefined): number | null {
+  if (!card || !card.prices) return null;
   const priceStr = card.isFoilPull ? card.prices.usd_foil : card.prices.usd;
   if (!priceStr) return null;
   return parseFloat(priceStr);

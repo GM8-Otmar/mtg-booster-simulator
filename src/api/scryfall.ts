@@ -222,7 +222,7 @@ export async function fetchPlayBooster(setCode: string): Promise<PlayBoosterPack
 // ~15 cards: 5 foil commons, 4 foil uncommons, 2-3 rares, 1 foil rare, extended art etc.
 
 export async function fetchCollectorBooster(setCode: string): Promise<CollectorBoosterPack> {
-  console.log(`💎 Opening COLLECTOR BOOSTER from set: ${setCode}`);
+  console.log(`Opening COLLECTOR BOOSTER from set: ${setCode}`);
   const seenIds = new Set<string>();
 
   try {

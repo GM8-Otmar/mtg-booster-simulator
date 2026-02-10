@@ -8,7 +8,7 @@ interface CardGridProps {
 }
 
 function calculatePackValue(pack: BoosterPack): number {
-  const allCards = getPackCards(pack);
+  const allCards = getPackCards(pack).filter(card => card != null);
   return allCards.reduce((total, card) => {
     const price = getCardPrice(card);
     return total + (price || 0);
@@ -16,7 +16,7 @@ function calculatePackValue(pack: BoosterPack): number {
 }
 
 function countFoils(pack: BoosterPack): number {
-  return getPackCards(pack).filter(card => card.isFoilPull).length;
+  return getPackCards(pack).filter(card => card && card.isFoilPull).length;
 }
 
 function PlayBoosterGrid({ pack }: { pack: PlayBoosterPack }) {
