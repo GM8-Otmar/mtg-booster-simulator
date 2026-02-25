@@ -14,7 +14,7 @@ interface BattlefieldZoneProps {
 export default function BattlefieldZone({
   cards,
   label,
-  heightClass = 'flex-1',
+  heightClass = 'flex-1 min-h-0',
 }: BattlefieldZoneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 

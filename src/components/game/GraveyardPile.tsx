@@ -1,11 +1,36 @@
 import { useState } from 'react';
 import type { BattlefieldCard } from '../../types/game';
 import CardContextMenu from './CardContextMenu';
+import { useCardPreview } from './CardHoverPreview';
 
 interface GraveyardPileProps {
   cards: BattlefieldCard[];
   label?: string;
   borderColor?: string;
+}
+
+function GraveyardCard({ card, onContextMenu }: {
+  card: BattlefieldCard;
+  onContextMenu: (e: React.MouseEvent) => void;
+}) {
+  const cardPreview = useCardPreview(card.imageUri, card.name);
+  return (
+    <div
+      className="flex items-center gap-2 p-1.5 rounded hover:bg-navy-light cursor-pointer"
+      onContextMenu={onContextMenu}
+      {...cardPreview}
+    >
+      {card.imageUri && (
+        <img
+          src={card.imageUri}
+          alt={card.name}
+          className="w-8 h-11 object-cover rounded"
+          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+      )}
+      <span className="text-sm text-cream truncate">{card.name}</span>
+    </div>
+  );
 }
 
 export default function GraveyardPile({
@@ -17,6 +42,7 @@ export default function GraveyardPile({
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
 
   const topCard = cards[cards.length - 1] ?? null;
+  const topCardPreview = useCardPreview(topCard?.imageUri ?? null, topCard?.name ?? '');
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -25,9 +51,15 @@ export default function GraveyardPile({
         className={`relative w-16 h-[90px] rounded-md border-2 ${borderColor} cursor-pointer overflow-hidden shadow-md`}
         onClick={() => cards.length > 0 && setExpanded(v => !v)}
         title={`Graveyard — ${cards.length} card${cards.length !== 1 ? 's' : ''}`}
+        {...topCardPreview}
       >
         {topCard?.imageUri ? (
-          <img src={topCard.imageUri} alt={topCard.name} className="w-full h-full object-cover" />
+          <img
+            src={topCard.imageUri}
+            alt={topCard.name}
+            className="w-full h-full object-cover"
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
         ) : (
           <div className="w-full h-full bg-navy-light flex items-center justify-center">
             <span className="text-cream-muted/50 text-xs">{cards.length}</span>
@@ -57,19 +89,14 @@ export default function GraveyardPile({
             </div>
             <div className="overflow-y-auto space-y-1">
               {[...cards].reverse().map(card => (
-                <div
+                <GraveyardCard
                   key={card.instanceId}
-                  className="flex items-center gap-2 p-1.5 rounded hover:bg-navy-light cursor-pointer"
+                  card={card}
                   onContextMenu={e => {
                     e.preventDefault();
                     setMenuInfo({ card, x: e.clientX, y: e.clientY });
                   }}
-                >
-                  {card.imageUri && (
-                    <img src={card.imageUri} alt={card.name} className="w-8 h-11 object-cover rounded" />
-                  )}
-                  <span className="text-sm text-cream truncate">{card.name}</span>
-                </div>
+                />
               ))}
             </div>
           </div>

@@ -2,6 +2,8 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import type { BattlefieldCard as BFCard } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
 import CardContextMenu from './CardContextMenu';
+import { useCardPreview } from './CardHoverPreview';
+import { useCardInspector } from './CardInspectorPanel';
 
 interface BattlefieldCardProps {
   card: BFCard;
@@ -14,6 +16,7 @@ const CARD_H_PX = 112;
 
 export default function BattlefieldCard({ card, containerRef }: BattlefieldCardProps) {
   const { moveCard, tapCard, playerId } = useGameTable();
+  const { inspect } = useCardInspector();
 
   // Context menu
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -27,6 +30,7 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
 
   const isOwner = card.controller === playerId;
   const isFaceDown = card.faceDown;
+  const cardPreview = useCardPreview(isFaceDown ? null : card.imageUri, card.name);
 
   // Convert percentage coords → pixel offset within container
   const pctToStyle = (pctX: number, pctY: number) => ({
@@ -97,9 +101,14 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
         moveCard(card.instanceId, finalX, finalY, true); // persist
         setVisualPos({ x: finalX, y: finalY });
       }
+    } else {
+      // Single click (no drag) → inspect
+      if (!movedRef.current) {
+        inspect({ name: card.name, imageUri: isFaceDown ? null : card.imageUri, instanceId: card.instanceId });
+      }
     }
     draggingRef.current = false;
-  }, [card.instanceId, containerRef, moveCard, isOwner]);
+  }, [card.instanceId, card.name, card.imageUri, containerRef, moveCard, isOwner, inspect, isFaceDown]);
 
   // ── Double-click: tap/untap ──────────────────────────────────────────────
 
@@ -147,6 +156,9 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
         onPointerUp={onPointerUp}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
+        onMouseEnter={cardPreview.onMouseEnter}
+        onMouseMove={cardPreview.onMouseMove}
+        onMouseLeave={cardPreview.onMouseLeave}
       >
         {/* Card image or face-down back */}
         <div className={`w-full h-full rounded-lg overflow-hidden border-2 ${borderColor} shadow-lg`}>
@@ -163,6 +175,7 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
               alt={card.name}
               className="w-full h-full object-cover pointer-events-none"
               draggable={false}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
           ) : (
             <div className="w-full h-full bg-navy-light flex items-center justify-center p-1">

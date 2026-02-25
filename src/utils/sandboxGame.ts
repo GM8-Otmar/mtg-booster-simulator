@@ -5,32 +5,33 @@
 
 import type { GameRoom, BattlefieldCard, GamePlayerState } from '../types/game';
 
-const SANDBOX_CARDS: { name: string; image: string }[] = [
-  { name: 'Sol Ring', image: 'https://cards.scryfall.io/normal/front/0/2/02d6d693-f1f3-4317-bcc0-c21fa8490d38.jpg' },
-  { name: 'Lightning Bolt', image: 'https://cards.scryfall.io/normal/front/e/3/e3285e6b-3e79-4d7c-bf96-d920f973b122.jpg' },
-  { name: 'Llanowar Elves', image: 'https://cards.scryfall.io/normal/front/b/6/b63a7b2c-6e72-4f06-b98d-2f18cc34b3f6.jpg' },
-  { name: 'Counterspell', image: 'https://cards.scryfall.io/normal/front/8/e/8e2e3aed-a8cd-4fcc-a673-82d5df8f887c.jpg' },
-  { name: 'Dark Ritual', image: 'https://cards.scryfall.io/normal/front/9/e/9e0dc44e-59fc-4fa1-ace5-a00faeea2e4f.jpg' },
-  { name: 'Birds of Paradise', image: 'https://cards.scryfall.io/normal/front/c/c/ccb04a58-2fa5-4b7d-b89e-7c36b50e6b6a.jpg' },
-  { name: 'Path to Exile', image: 'https://cards.scryfall.io/normal/front/5/e/5ebb0d32-8a50-4516-a643-e81bc3714a03.jpg' },
-  { name: 'Thoughtseize', image: 'https://cards.scryfall.io/normal/front/b/8/b80dd263-b8d3-4b1c-9893-f9e9ec43cf82.jpg' },
-  { name: 'Rampant Growth', image: 'https://cards.scryfall.io/normal/front/9/2/92a91b7f-0e9d-4b10-9a51-32cfeaaecc5b.jpg' },
-  { name: 'Giant Growth', image: 'https://cards.scryfall.io/normal/front/0/d/0d8ec4e1-a9e3-4e42-b6af-c9ed3ef04f39.jpg' },
-  { name: 'Swords to Plowshares', image: 'https://cards.scryfall.io/normal/front/6/b/6b7d49b2-7bba-44cf-b24a-7b68748c9c25.jpg' },
-  { name: 'Murder', image: 'https://cards.scryfall.io/normal/front/d/d/dd2cd576-99e0-40fb-9a66-c4d5b3acbc1c.jpg' },
-  { name: 'Swamp', image: 'https://cards.scryfall.io/normal/front/f/8/f8eaa5b0-5281-4b4c-a430-d70abad4e8b3.jpg' },
-  { name: 'Island', image: 'https://cards.scryfall.io/normal/front/b/a/ba2ad0ec-9dc9-4fa3-9f18-b9af5a9dde42.jpg' },
-  { name: 'Forest', image: 'https://cards.scryfall.io/normal/front/5/e/5e9f08b5-8816-4606-bfd1-f13e587f6b63.jpg' },
-  { name: 'Mountain', image: 'https://cards.scryfall.io/normal/front/a/a/aabbef35-9f93-4aba-a6d9-5ae3d8f52a82.jpg' },
-  { name: 'Plains', image: 'https://cards.scryfall.io/normal/front/3/3/336294c5-b291-4c73-bb9d-cce89c4f35c2.jpg' },
-  { name: 'Arcane Signet', image: 'https://cards.scryfall.io/normal/front/e/5/e5a1c0f0-78ea-4ffe-afba-ef0c4e28f2b9.jpg' },
-  { name: 'Command Tower', image: 'https://cards.scryfall.io/normal/front/a/1/a11a0e45-8bd4-4ca6-9db2-f9413ae7a2e8.jpg' },
-  { name: 'Cultivate', image: 'https://cards.scryfall.io/normal/front/0/f/0f089e08-c6c4-4b97-bd94-e24900b1cbf9.jpg' },
+const SANDBOX_CARDS: { name: string; image: string; scryfallId: string }[] = [
+  { name: 'Sol Ring',             scryfallId: '14dbce79-1fcc-4cc9-bf38-7729e44a411e', image: '/api/cardimg/14dbce79-1fcc-4cc9-bf38-7729e44a411e' },
+  { name: 'Lightning Bolt',       scryfallId: '77c6fa74-5543-42ac-9ead-0e890b188e99', image: '/api/cardimg/77c6fa74-5543-42ac-9ead-0e890b188e99' },
+  { name: 'Llanowar Elves',       scryfallId: '6a0b230b-d391-4998-a3f7-7b158a0ec2cd', image: '/api/cardimg/6a0b230b-d391-4998-a3f7-7b158a0ec2cd' },
+  { name: 'Counterspell',         scryfallId: '4f616706-ec97-4923-bb1e-11a69fbaa1f8', image: '/api/cardimg/4f616706-ec97-4923-bb1e-11a69fbaa1f8' },
+  { name: 'Dark Ritual',          scryfallId: '95f27eeb-6f14-4db3-adb9-9be5ed76b34b', image: '/api/cardimg/95f27eeb-6f14-4db3-adb9-9be5ed76b34b' },
+  { name: 'Birds of Paradise',    scryfallId: '3d69a3e0-6a2e-475a-964e-0affed1c017d', image: '/api/cardimg/3d69a3e0-6a2e-475a-964e-0affed1c017d' },
+  { name: 'Path to Exile',        scryfallId: '35649ef0-b2fd-429f-be5f-766d5cea5994', image: '/api/cardimg/35649ef0-b2fd-429f-be5f-766d5cea5994' },
+  { name: 'Thoughtseize',         scryfallId: 'b281a308-ab6b-47b6-bec7-632c9aaecede', image: '/api/cardimg/b281a308-ab6b-47b6-bec7-632c9aaecede' },
+  { name: 'Rampant Growth',       scryfallId: 'b7c47024-5e08-4b17-b41a-7647f8b814b9', image: '/api/cardimg/b7c47024-5e08-4b17-b41a-7647f8b814b9' },
+  { name: 'Giant Growth',         scryfallId: 'bd0bf74e-14c1-4428-88d8-2181a080b5d0', image: '/api/cardimg/bd0bf74e-14c1-4428-88d8-2181a080b5d0' },
+  { name: 'Swords to Plowshares', scryfallId: '0e7ff4dc-af63-4342-9a44-d059e62bd14c', image: '/api/cardimg/0e7ff4dc-af63-4342-9a44-d059e62bd14c' },
+  { name: 'Murder',               scryfallId: '2c249609-9cf7-46f1-b94c-9329add966bb', image: '/api/cardimg/2c249609-9cf7-46f1-b94c-9329add966bb' },
+  { name: 'Swamp',                scryfallId: '41c7688d-8155-45fd-83ba-ff9be4d414a3', image: '/api/cardimg/41c7688d-8155-45fd-83ba-ff9be4d414a3' },
+  { name: 'Island',               scryfallId: 'be2319a6-d089-4d13-8a7b-3552e654cdc5', image: '/api/cardimg/be2319a6-d089-4d13-8a7b-3552e654cdc5' },
+  { name: 'Forest',               scryfallId: '6194850b-d70a-4f3e-be3e-bfb23ce1170b', image: '/api/cardimg/6194850b-d70a-4f3e-be3e-bfb23ce1170b' },
+  { name: 'Mountain',             scryfallId: '6243f79f-b0e3-4fba-b899-7535e1a277e2', image: '/api/cardimg/6243f79f-b0e3-4fba-b899-7535e1a277e2' },
+  { name: 'Plains',               scryfallId: '1b405611-27d4-435a-8e8e-6d528626fd27', image: '/api/cardimg/1b405611-27d4-435a-8e8e-6d528626fd27' },
+  { name: 'Arcane Signet',        scryfallId: '049ca0ff-0ca4-44f7-b144-731cf453afa9', image: '/api/cardimg/049ca0ff-0ca4-44f7-b144-731cf453afa9' },
+  { name: 'Command Tower',        scryfallId: '4d51a621-be31-4b74-8e0b-3958180a8bc5', image: '/api/cardimg/4d51a621-be31-4b74-8e0b-3958180a8bc5' },
+  { name: 'Cultivate',            scryfallId: '4824ad7c-e533-4357-b486-9e908721db65', image: '/api/cardimg/4824ad7c-e533-4357-b486-9e908721db65' },
 ];
 
 const COMMANDER_CARD = {
   name: "Atraxa, Praetors' Voice",
-  image: 'https://cards.scryfall.io/normal/front/d/0/d0d33d52-3d28-4635-b985-ef3b579c6b35.jpg',
+  scryfallId: 'd0d33d52-3d28-4635-b985-51e126289259',
+  image: '/api/cardimg/d0d33d52-3d28-4635-b985-51e126289259',
 };
 
 let idCounter = 1;
@@ -55,13 +56,13 @@ function makeSandboxPlayer(
 
   // Build library from sample cards (x2 each for ~40 cards)
   const deckCards = shuffle([...SANDBOX_CARDS, ...SANDBOX_CARDS]);
-  for (const { name, image } of deckCards) {
+  for (const item of deckCards) {
     const instanceId = uid();
     roomCards[instanceId] = {
       instanceId,
-      scryfallId: instanceId,
-      name,
-      imageUri: image,
+      scryfallId: item.scryfallId,
+      name: item.name,
+      imageUri: item.image,
       zone: 'library',
       controller: playerId,
       x: 10 + Math.random() * 80,
@@ -80,7 +81,7 @@ function makeSandboxPlayer(
     const cmdId = uid();
     roomCards[cmdId] = {
       instanceId: cmdId,
-      scryfallId: cmdId,
+      scryfallId: COMMANDER_CARD.scryfallId,
       name: COMMANDER_CARD.name,
       imageUri: COMMANDER_CARD.image,
       zone: 'command_zone',

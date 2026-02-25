@@ -27,49 +27,47 @@ export default function PlayerBanner({ player, isCurrentPlayer = false }: Player
     .map(id => room.cards[id])
     .filter(Boolean) as any[];
 
-  const handCount = player.handCardIds.length;
-
   return (
-    <div
-      className={`flex items-center gap-3 px-3 py-2 rounded-xl border
-        ${isCurrentPlayer
-          ? 'bg-navy-light border-cyan/40'
-          : 'bg-navy border-cyan-dim/30'
-        }`}
-    >
-      {/* Player name + hand count */}
-      <div className="flex flex-col min-w-[80px]">
-        <span className={`font-bold text-sm truncate ${isCurrentPlayer ? 'text-cyan' : 'text-cream'}`}>
-          {player.playerName}
-        </span>
-        <span className="text-[10px] text-cream-muted">
-          Hand: {handCount} {isCurrentPlayer ? '' : '(hidden)'}
-        </span>
+    <div className="flex flex-col gap-4 p-3">
+      {/* Player name */}
+      <div className={`text-sm font-bold truncate ${isCurrentPlayer ? 'text-cyan' : 'text-cream'}`}>
+        {player.playerName}
+        {isCurrentPlayer && <span className="text-cream-muted text-xs font-normal ml-1">(you)</span>}
       </div>
 
-      {/* Life + poison */}
+      {/* Life counter — big and prominent */}
       <LifeCounter
         life={player.life}
         poison={player.poisonCounters}
         playerId={player.playerId}
       />
 
+      {/* Hand count */}
+      <div className="flex items-center justify-between text-xs text-cream-muted border-t border-cyan-dim/20 pt-2">
+        <span>Hand</span>
+        <span className="font-bold text-cream">{player.handCardIds.length}</span>
+      </div>
+
       {/* Library */}
-      <LibraryStack count={player.libraryCardIds.length} playerId={player.playerId} />
+      <div className="border-t border-cyan-dim/20 pt-2">
+        <LibraryStack count={player.libraryCardIds.length} playerId={player.playerId} />
+      </div>
 
-      {/* Graveyard */}
-      <GraveyardPile cards={graveyardCards} />
+      {/* Graveyard + Exile side by side */}
+      <div className="flex gap-3 justify-center border-t border-cyan-dim/20 pt-2">
+        <GraveyardPile cards={graveyardCards} />
+        <ExilePile cards={exileCards} />
+      </div>
 
-      {/* Exile */}
-      <ExilePile cards={exileCards} />
-
-      {/* Command Zone (only if commander format) */}
+      {/* Command Zone */}
       {commandCards.length > 0 && (
-        <CommandZone
-          cards={commandCards}
-          commanderTax={player.commanderTax}
-          playerId={player.playerId}
-        />
+        <div className="border-t border-cyan-dim/20 pt-2">
+          <CommandZone
+            cards={commandCards}
+            commanderTax={player.commanderTax}
+            playerId={player.playerId}
+          />
+        </div>
       )}
     </div>
   );

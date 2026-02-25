@@ -5,6 +5,7 @@ import cors from 'cors';
 import path from 'path';
 import eventsRouter from './routes/events';
 import gamesRouter from './routes/games';
+import cardimgRouter from './routes/cardimg';
 import * as storage from './services/storageService';
 import * as gameStorage from './services/gameStorageService';
 import { registerGameHandlers } from './socket/gameHandlers';
@@ -30,6 +31,7 @@ app.use(express.json());
 // API Routes
 app.use('/api/events', eventsRouter);
 app.use('/api/games', gamesRouter);
+app.use('/api/cardimg', cardimgRouter);
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
