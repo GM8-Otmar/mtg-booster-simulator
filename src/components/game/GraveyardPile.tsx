@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { BattlefieldCard } from '../../types/game';
 import CardContextMenu from './CardContextMenu';
-import { useCardPreview } from './CardHoverPreview';
 
 interface GraveyardPileProps {
   cards: BattlefieldCard[];
@@ -13,12 +12,10 @@ function GraveyardCard({ card, onContextMenu }: {
   card: BattlefieldCard;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
-  const cardPreview = useCardPreview(card.imageUri, card.name);
   return (
     <div
       className="flex items-center gap-2 p-1.5 rounded hover:bg-navy-light cursor-pointer"
       onContextMenu={onContextMenu}
-      {...cardPreview}
     >
       {card.imageUri && (
         <img
@@ -42,7 +39,6 @@ export default function GraveyardPile({
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
 
   const topCard = cards[cards.length - 1] ?? null;
-  const topCardPreview = useCardPreview(topCard?.imageUri ?? null, topCard?.name ?? '');
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -51,7 +47,6 @@ export default function GraveyardPile({
         className={`relative w-16 h-[90px] rounded-md border-2 ${borderColor} cursor-pointer overflow-hidden shadow-md`}
         onClick={() => cards.length > 0 && setExpanded(v => !v)}
         title={`Graveyard — ${cards.length} card${cards.length !== 1 ? 's' : ''}`}
-        {...topCardPreview}
       >
         {topCard?.imageUri ? (
           <img

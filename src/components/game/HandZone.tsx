@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import type { BattlefieldCard } from '../../types/game';
 import CardContextMenu from './CardContextMenu';
-import { useCardPreview } from './CardHoverPreview';
 import { useGameTable } from '../../contexts/GameTableContext';
 import { useCardInspector } from './CardInspectorPanel';
 
@@ -19,9 +18,8 @@ function HandCard({
   fanAngle: number;
   startAngle: number;
   onContextMenu: (e: React.MouseEvent) => void;
-  onPlayToBattlefield: (instanceId: string) => void;
+  onPlayToBattlefield: (instanceId: string, clientX: number, clientY: number) => void;
 }) {
-  const cardPreview = useCardPreview(card.imageUri, card.name);
   const { inspect } = useCardInspector();
   const angle = startAngle + i * fanAngle;
   const offsetX = (i - (total - 1) / 2) * 36;
@@ -31,6 +29,7 @@ function HandCard({
   const startY = useRef(0);
   const startX = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
@@ -51,18 +50,18 @@ function HandCard({
     if (!dragging.current) {
       dragging.current = true;
       setIsDragging(true);
-      cardPreview.onMouseLeave(); // hide preview while dragging
+      setIsHovered(false); // remove hover lift while dragging
     }
 
     setDragPos({ x: e.clientX, y: e.clientY });
-  }, [cardPreview]);
+  }, []);
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     if (dragging.current) {
       // Check if dragged significantly upward (into the battlefield area)
       const dy = startY.current - e.clientY; // positive = upward
       if (dy > 60) {
-        onPlayToBattlefield(card.instanceId);
+        onPlayToBattlefield(card.instanceId, e.clientX, e.clientY);
       }
       dragging.current = false;
       setIsDragging(false);
@@ -83,26 +82,19 @@ function HandCard({
           height: 112,
           left: `calc(50% + ${offsetX}px - 40px)`,
           bottom: 0,
-          transform: `rotate(${angle}deg)`,
+          transform: isHovered && !isDragging
+            ? `rotate(${angle}deg) translateY(-20px)`
+            : `rotate(${angle}deg)`,
           transformOrigin: 'bottom center',
-          zIndex: i,
+          zIndex: isHovered && !isDragging ? 99 : i,
           opacity: isDragging ? 0.3 : 1,
-          transition: isDragging ? 'none' : 'transform 0.15s ease, opacity 0.1s',
+          transition: isDragging ? 'none' : 'transform 0.15s ease, opacity 0.1s, z-index 0s',
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onMouseEnter={isDragging ? undefined : e => {
-          (e.currentTarget as HTMLElement).style.transform = `rotate(${angle}deg) translateY(-20px)`;
-          (e.currentTarget as HTMLElement).style.zIndex = '99';
-          cardPreview.onMouseEnter(e);
-        }}
-        onMouseLeave={isDragging ? undefined : e => {
-          (e.currentTarget as HTMLElement).style.transform = `rotate(${angle}deg)`;
-          (e.currentTarget as HTMLElement).style.zIndex = String(i);
-          cardPreview.onMouseLeave();
-        }}
-        onMouseMove={isDragging ? undefined : cardPreview.onMouseMove}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         onContextMenu={onContextMenu}
       >
         <div className="w-full h-full rounded-lg overflow-hidden border-2 border-cyan/50 shadow-lg">
@@ -167,16 +159,26 @@ function HandCard({
 }
 
 export default function HandZone({ cards }: HandZoneProps) {
-  const { changeZone } = useGameTable();
+  const { changeZone, moveCard } = useGameTable();
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
 
   const total = cards.length;
   const fanAngle = Math.min(4, 60 / Math.max(total, 1));
   const startAngle = -((total - 1) / 2) * fanAngle;
 
-  const handlePlayToBattlefield = useCallback((instanceId: string) => {
+  const handlePlayToBattlefield = useCallback((instanceId: string, clientX: number, clientY: number) => {
     changeZone(instanceId, 'battlefield');
-  }, [changeZone]);
+    // After zone change, position the card where it was dropped.
+    // We use the battlefield element to convert clientX/Y → percentage.
+    const battlefield = document.querySelector('[data-battlefield]') as HTMLElement | null;
+    if (battlefield) {
+      const rect = battlefield.getBoundingClientRect();
+      const x = Math.max(5, Math.min(95, ((clientX - rect.left) / rect.width) * 100));
+      const y = Math.max(5, Math.min(95, ((clientY - rect.top) / rect.height) * 100));
+      // Small delay lets the zone change propagate before we move
+      setTimeout(() => moveCard(instanceId, x, y, true), 0);
+    }
+  }, [changeZone, moveCard]);
 
   if (total === 0) {
     return (

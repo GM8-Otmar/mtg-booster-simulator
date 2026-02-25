@@ -10,7 +10,6 @@ import GameActionLog from '../components/game/GameActionLog';
 import ScryOverlay from '../components/game/ScryOverlay';
 import DeckImportModal from '../components/game/DeckImportModal';
 import type { BattlefieldCard } from '../types/game';
-import { CardPreviewProvider } from '../components/game/CardHoverPreview';
 import { CardInspectorProvider, CardInspectorPanel } from '../components/game/CardInspectorPanel';
 
 export default function GameTablePage() {
@@ -47,7 +46,6 @@ export default function GameTablePage() {
 
   return (
     <CardInspectorProvider>
-    <CardPreviewProvider>
     <div className="flex flex-col h-screen bg-navy text-cream overflow-hidden">
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
@@ -152,7 +150,6 @@ export default function GameTablePage() {
         <DeckImportModal onClose={() => setShowImportAfterJoin(false)} />
       )}
     </div>
-    </CardPreviewProvider>
     </CardInspectorProvider>
   );
 }

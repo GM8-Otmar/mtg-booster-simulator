@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { BattlefieldCard } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
 import CardContextMenu from './CardContextMenu';
-import { useCardPreview } from './CardHoverPreview';
 import { useCardInspector } from './CardInspectorPanel';
 
 interface CommandZoneProps {
@@ -18,7 +17,6 @@ function CommandCard({ card, isOwner, onContextMenu, onCast, onInspect }: {
   onCast: () => void;
   onInspect: () => void;
 }) {
-  const cardPreview = useCardPreview(card.imageUri, card.name);
   return (
     <div className="flex flex-col items-center gap-1">
       <div
@@ -27,7 +25,6 @@ function CommandCard({ card, isOwner, onContextMenu, onCast, onInspect }: {
         onDoubleClick={isOwner ? onCast : undefined}
         onClick={onInspect}
         title={isOwner ? 'Double-click to cast' : card.name}
-        {...cardPreview}
       >
         {card.imageUri ? (
           <img

@@ -125,7 +125,13 @@ export function CardInspectorPanel() {
 
       {/* Oracle data */}
       {oracle === 'loading' && (
-        <div className="text-cream-muted/40 text-xs text-center py-2">Loading…</div>
+        <div className="space-y-2 animate-pulse">
+          <div className="h-3 bg-navy-light rounded w-2/3" />
+          <div className="h-3 bg-navy-light rounded w-full" />
+          <div className="h-3 bg-navy-light rounded w-5/6" />
+          <div className="h-3 bg-navy-light rounded w-full" />
+          <div className="h-3 bg-navy-light rounded w-3/4" />
+        </div>
       )}
 
       {oracle && oracle !== 'loading' && (
