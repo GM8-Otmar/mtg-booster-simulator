@@ -11,6 +11,7 @@ import ScryOverlay from '../components/game/ScryOverlay';
 import DeckImportModal from '../components/game/DeckImportModal';
 import type { BattlefieldCard } from '../types/game';
 import { CardPreviewProvider } from '../components/game/CardHoverPreview';
+import { CardInspectorProvider, CardInspectorPanel } from '../components/game/CardInspectorPanel';
 
 export default function GameTablePage() {
   const {
@@ -45,6 +46,7 @@ export default function GameTablePage() {
   };
 
   return (
+    <CardInspectorProvider>
     <CardPreviewProvider>
     <div className="flex flex-col h-screen bg-navy text-cream overflow-hidden">
 
@@ -124,10 +126,18 @@ export default function GameTablePage() {
           )}
         </div>
 
-        {/* ── Right sidebar: player HUD ─────────────────────────────────── */}
+        {/* ── Right sidebar: player HUD + card inspector ────────────────── */}
         {myPlayer && (
-          <div className="w-56 shrink-0 border-l border-cyan-dim/30 bg-navy overflow-y-auto">
-            <PlayerBanner player={myPlayer} isCurrentPlayer />
+          <div className="w-56 shrink-0 border-l border-cyan-dim/30 bg-navy flex flex-col overflow-hidden">
+            {/* Player HUD — fixed height */}
+            <div className="shrink-0 overflow-y-auto border-b border-cyan-dim/20" style={{ maxHeight: '55%' }}>
+              <PlayerBanner player={myPlayer} isCurrentPlayer />
+            </div>
+            {/* Card inspector — fills remaining space */}
+            <div className="flex-1 overflow-y-auto border-t border-cyan-dim/10">
+              <p className="text-[9px] uppercase tracking-widest text-cream-muted/30 px-3 pt-2 pb-1">Inspector</p>
+              <CardInspectorPanel />
+            </div>
           </div>
         )}
       </div>
@@ -143,5 +153,6 @@ export default function GameTablePage() {
       )}
     </div>
     </CardPreviewProvider>
+    </CardInspectorProvider>
   );
 }

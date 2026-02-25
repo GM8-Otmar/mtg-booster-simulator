@@ -91,10 +91,9 @@ async function resolveNames(
     try {
       const resp = await axios.post(`${SCRYFALL_API}/cards/collection`, { identifiers: chunk });
       for (const card of resp.data.data ?? []) {
-        const imageUri =
-          card.image_uris?.normal ??
-          card.card_faces?.[0]?.image_uris?.normal ??
-          null;
+        const imageUri = card.id
+          ? `/api/cardimg/${card.id}`
+          : (card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null);
         result.set(card.name.toLowerCase(), { scryfallId: card.id, imageUri });
       }
     } catch { /* partial failure — cards not found get null imageUri */ }

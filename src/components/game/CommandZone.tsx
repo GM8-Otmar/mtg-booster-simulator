@@ -3,6 +3,7 @@ import type { BattlefieldCard } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
 import CardContextMenu from './CardContextMenu';
 import { useCardPreview } from './CardHoverPreview';
+import { useCardInspector } from './CardInspectorPanel';
 
 interface CommandZoneProps {
   cards: BattlefieldCard[];
@@ -10,11 +11,12 @@ interface CommandZoneProps {
   playerId: string;
 }
 
-function CommandCard({ card, isOwner, onContextMenu, onCast }: {
+function CommandCard({ card, isOwner, onContextMenu, onCast, onInspect }: {
   card: BattlefieldCard;
   isOwner: boolean;
   onContextMenu: (e: React.MouseEvent) => void;
   onCast: () => void;
+  onInspect: () => void;
 }) {
   const cardPreview = useCardPreview(card.imageUri, card.name);
   return (
@@ -23,6 +25,7 @@ function CommandCard({ card, isOwner, onContextMenu, onCast }: {
         className="relative w-16 h-[90px] rounded-md overflow-hidden border-2 border-magenta shadow-lg shadow-magenta/20 cursor-pointer"
         onContextMenu={onContextMenu}
         onDoubleClick={isOwner ? onCast : undefined}
+        onClick={onInspect}
         title={isOwner ? 'Double-click to cast' : card.name}
         {...cardPreview}
       >
@@ -48,6 +51,7 @@ function CommandCard({ card, isOwner, onContextMenu, onCast }: {
 
 export default function CommandZone({ cards, commanderTax, playerId: ownerId }: CommandZoneProps) {
   const { notifyCommanderCast, changeZone, playerId: myId } = useGameTable();
+  const { inspect } = useCardInspector();
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
 
   const isOwner = ownerId === myId;
@@ -80,6 +84,7 @@ export default function CommandZone({ cards, commanderTax, playerId: ownerId }: 
               notifyCommanderCast(card.instanceId);
               changeZone(card.instanceId, 'battlefield');
             }}
+            onInspect={() => inspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId })}
           />
         ))}
       </div>

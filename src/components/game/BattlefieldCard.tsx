@@ -3,6 +3,7 @@ import type { BattlefieldCard as BFCard } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
 import CardContextMenu from './CardContextMenu';
 import { useCardPreview } from './CardHoverPreview';
+import { useCardInspector } from './CardInspectorPanel';
 
 interface BattlefieldCardProps {
   card: BFCard;
@@ -15,6 +16,7 @@ const CARD_H_PX = 112;
 
 export default function BattlefieldCard({ card, containerRef }: BattlefieldCardProps) {
   const { moveCard, tapCard, playerId } = useGameTable();
+  const { inspect } = useCardInspector();
 
   // Context menu
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -99,9 +101,14 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
         moveCard(card.instanceId, finalX, finalY, true); // persist
         setVisualPos({ x: finalX, y: finalY });
       }
+    } else {
+      // Single click (no drag) → inspect
+      if (!movedRef.current) {
+        inspect({ name: card.name, imageUri: isFaceDown ? null : card.imageUri, instanceId: card.instanceId });
+      }
     }
     draggingRef.current = false;
-  }, [card.instanceId, containerRef, moveCard, isOwner]);
+  }, [card.instanceId, card.name, card.imageUri, containerRef, moveCard, isOwner, inspect, isFaceDown]);
 
   // ── Double-click: tap/untap ──────────────────────────────────────────────
 
