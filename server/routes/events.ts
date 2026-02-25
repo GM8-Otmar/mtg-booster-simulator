@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import * as eventService from '../services/eventService';
+import { broadcastEventUpdate, broadcastPlayerJoined } from '../index';
 import { CreateEventRequest, JoinEventRequest, SelectLegendRequest } from '../types/server';
 import axios from 'axios';
 
@@ -71,6 +72,10 @@ router.post('/:eventId/join', async (req: Request, res: Response) => {
     }
 
     const result = await eventService.joinEvent(event.code, request.playerName);
+    // Notify everyone in the lobby that a new player joined
+    const newPlayer = result.event.players.find(p => p.id === result.playerId);
+    if (newPlayer) broadcastPlayerJoined(result.event.id, newPlayer);
+    broadcastEventUpdate(result.event.id, result.event);
     res.json(result);
   } catch (error) {
     console.error('Error joining event:', error);
@@ -91,6 +96,8 @@ router.post('/:eventId/start', async (req: Request, res: Response) => {
     }
 
     const event = await eventService.startEvent(eventId, playerId);
+    // Notify all lobby members the event has started
+    broadcastEventUpdate(event.id, event);
     res.json({ event });
   } catch (error) {
     console.error('Error starting event:', error);

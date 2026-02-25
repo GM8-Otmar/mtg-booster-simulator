@@ -4,11 +4,15 @@ import EventCreator from '../components/sealed/EventCreator';
 import EventJoin from '../components/sealed/EventJoin';
 import PackProgression from '../components/sealed/PackProgression';
 import PoolView from '../components/sealed/PoolView';
+import LegendSelector from '../components/sealed/LegendSelector';
 import { Target, Link2 } from 'lucide-react';
 
 function SealedEventContent() {
-  const { phase, leaveEvent } = useSealedEvent();
+  const { phase, currentPlayer, leaveEvent } = useSealedEvent();
   const [showCreateOrJoin, setShowCreateOrJoin] = useState<'create' | 'join' | null>(null);
+
+  // After all 6 packs are opened but no legend chosen yet → show legend picker
+  const needsLegend = phase === 'complete' && currentPlayer && !currentPlayer.selectedLegend;
 
   // Initial choice screen
   if (phase === 'idle' && !showCreateOrJoin) {
@@ -63,6 +67,12 @@ function SealedEventContent() {
   }
 
   if (phase === 'complete') {
+    // Step 1: pick a commander
+    if (needsLegend) {
+      return <LegendSelector />;
+    }
+
+    // Step 2: build deck
     return (
       <div className="min-h-screen bg-navy text-cream p-8">
         <div className="max-w-7xl mx-auto">

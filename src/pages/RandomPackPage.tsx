@@ -133,8 +133,8 @@ export default function RandomPackPage() {
         {pack && (
           <>
             <CardInspectPanel card={inspectCard} title="Pack Inspect" />
-            <div className="mb-10 pr-60">
-              <p className="text-center text-cream-muted text-sm mb-4">Use arrows or keyboard to flip through your pack</p>
+            {/* Slider — right-pad to keep content clear of the fixed inspect panel */}
+            <div className="mb-10 xl:pr-72">
               <PackRevealSlider cards={getPackCards(pack)} onCurrentCardChange={setSliderCurrentCard} />
             </div>
             <CardGrid pack={pack} onCardHover={(c) => setGridHoverCard(c ?? null)} onCardLeave={() => setGridHoverCard(null)} />

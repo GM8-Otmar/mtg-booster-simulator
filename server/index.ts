@@ -4,8 +4,10 @@ import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import path from 'path';
 import eventsRouter from './routes/events';
+import gamesRouter from './routes/games';
 import * as storage from './services/storageService';
-
+import * as gameStorage from './services/gameStorageService';
+import { registerGameHandlers } from './socket/gameHandlers';
 const app = express();
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
@@ -27,6 +29,7 @@ app.use(express.json());
 
 // API Routes
 app.use('/api/events', eventsRouter);
+app.use('/api/games', gamesRouter);
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
@@ -39,21 +42,14 @@ if (process.env.NODE_ENV === 'production') {
 
 // Socket.IO for real-time updates
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  // Sealed event rooms
+  socket.on('join-event', (eventId: string) => { socket.join(eventId); });
+  socket.on('leave-event', (eventId: string) => { socket.leave(eventId); });
 
-  socket.on('join-event', (eventId: string) => {
-    socket.join(eventId);
-    console.log(`Socket ${socket.id} joined event ${eventId}`);
-  });
+  // Game table rooms
+  registerGameHandlers(io, socket);
 
-  socket.on('leave-event', (eventId: string) => {
-    socket.leave(eventId);
-    console.log(`Socket ${socket.id} left event ${eventId}`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
+  socket.on('disconnect', () => {});
 });
 
 // Broadcast helper for services to use

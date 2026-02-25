@@ -9,7 +9,7 @@ export default defineConfig({
     port: 5173,
     allowedHosts: ['.ngrok-free.dev'],
     hmr: {
-      clientPort: 443, // Use HTTPS port for ngrok
+      // clientPort: 443, // Uncomment only when tunnelling through ngrok
     },
     proxy: {
       '/api': {

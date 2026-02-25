@@ -2,9 +2,13 @@ import { useState } from 'react';
 import ModeSelector from './components/ModeSelector';
 import RandomPackPage from './pages/RandomPackPage';
 import SealedEventPage from './pages/SealedEventPage';
+import GameTablePage from './pages/GameTablePage';
+import { GameTableProvider } from './contexts/GameTableContext';
+
+type AppMode = 'random' | 'sealed' | 'game' | null;
 
 function App() {
-  const [mode, setMode] = useState<'random' | 'sealed' | null>(null);
+  const [mode, setMode] = useState<AppMode>(null);
 
   if (!mode) {
     return <ModeSelector onSelectMode={setMode} />;
@@ -35,6 +39,14 @@ function App() {
         </button>
         <SealedEventPage />
       </div>
+    );
+  }
+
+  if (mode === 'game') {
+    return (
+      <GameTableProvider>
+        <GameTablePage />
+      </GameTableProvider>
     );
   }
 

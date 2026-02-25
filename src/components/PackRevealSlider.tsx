@@ -1,12 +1,18 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getCardImageUrl } from '../types/card';
 import type { ScryfallCard } from '../types/card';
 
 interface PackRevealSliderProps {
   cards: ScryfallCard[];
-  onCardHover?: (card: ScryfallCard | null) => void;
   onCurrentCardChange?: (card: ScryfallCard | null) => void;
 }
+
+// Rarity of incoming card determines the flash colour on reveal
+const REVEAL_FLASH: Record<string, string> = {
+  mythic: 'rgba(255,0,128,0.18)',
+  rare:   'rgba(0,255,255,0.13)',
+  special:'rgba(255,0,128,0.18)',
+};
 
 function MiniCard({ card, className = '' }: { card: ScryfallCard; className?: string }) {
   const url = getCardImageUrl(card, 'normal');
@@ -15,32 +21,73 @@ function MiniCard({ card, className = '' }: { card: ScryfallCard; className?: st
       {url ? (
         <img src={url} alt={card.name} className="w-full h-full object-cover pointer-events-none" />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-cream-muted text-xs p-2">{card.name}</div>
+        <div className="w-full h-full flex items-center justify-center text-cream-muted text-xs p-2 pointer-events-none">{card.name}</div>
       )}
     </div>
   );
 }
 
-export function PackRevealSlider({ cards, onCardHover, onCurrentCardChange }: PackRevealSliderProps) {
+export function PackRevealSlider({ cards, onCurrentCardChange }: PackRevealSliderProps) {
   const [index, setIndex] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
-  const dragStartRef = useRef<{ x: number; startIndex: number; target: EventTarget | null } | null>(null);
-  const ripZoneRef = useRef<HTMLDivElement | null>(null);
 
+  // Flip animation state: 'idle' | 'flipping'
+  const [flipState, setFlipState] = useState<'idle' | 'flipping'>('idle');
+  // Flash overlay for mythic/rare reveals
+  const [flashColor, setFlashColor] = useState<string | null>(null);
+
+  // Stable refs so pointer handlers have zero deps and never go stale
+  const indexRef = useRef(index);
+  const cardsLenRef = useRef(cards.length);
+  const cardsRef = useRef(cards);
+  const dragOffsetRef = useRef(0);
+  const dragStartXRef = useRef<number | null>(null);
+  const ripZoneRef = useRef<HTMLDivElement | null>(null);
+  const flipInFlight = useRef(false);
+
+  useEffect(() => { indexRef.current = index; }, [index]);
+  useEffect(() => { cardsLenRef.current = cards.length; cardsRef.current = cards; }, [cards]);
+
+  // Reset to card 0 only when the pack itself changes (stable ID string dep)
+  const cardIdKey = cards.map(c => c.id).join(',');
   useEffect(() => {
     setIndex(0);
-  }, [cards]);
+    setFlipState('idle');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardIdKey]);
 
-  const currentCard = cards[index] ?? null;
+  // Notify parent whenever current card changes
   useEffect(() => {
-    onCardHover?.(currentCard);
-    onCurrentCardChange?.(currentCard);
-  }, [index, cards, currentCard, onCardHover, onCurrentCardChange]);
+    onCurrentCardChange?.(cards[index] ?? null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, cardIdKey]);
 
-  const goPrev = useCallback(() => setIndex(i => Math.max(0, i - 1)), []);
-  const goNext = useCallback(() => setIndex(i => Math.min(cards.length - 1, i + 1)), [cards.length]);
+  // Animate flip then commit index change
+  const navigateTo = useCallback((next: number) => {
+    if (flipInFlight.current) return;
+    const target = Math.max(0, Math.min(cardsLenRef.current - 1, next));
+    if (target === indexRef.current) return;
 
-  // Keyboard
+    flipInFlight.current = true;
+    setFlipState('flipping');
+
+    setTimeout(() => {
+      setIndex(target);
+      const card = cardsRef.current[target];
+      if (card) {
+        const fc = REVEAL_FLASH[card.rarity] ?? null;
+        setFlashColor(fc);
+        if (fc) setTimeout(() => setFlashColor(null), 400);
+      }
+      setFlipState('idle');
+      flipInFlight.current = false;
+    }, 160); // half-flip duration
+  }, []);
+
+  const goPrev = useCallback(() => navigateTo(indexRef.current - 1), [navigateTo]);
+  const goNext = useCallback(() => navigateTo(indexRef.current + 1), [navigateTo]);
+
+  // Keyboard nav
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -52,51 +99,46 @@ export function PackRevealSlider({ cards, onCardHover, onCurrentCardChange }: Pa
     return () => window.removeEventListener('keydown', handleKey);
   }, [goPrev, goNext]);
 
-  // Swipe/drag to "rip" through pack; tap left/right to flip
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      dragStartRef.current = { x: e.clientX, startIndex: index, target: e.target };
-      ripZoneRef.current?.setPointerCapture?.(e.pointerId);
-    },
-    [index]
-  );
+  // Pointer handlers — all via refs, zero stale closures
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    dragStartXRef.current = e.clientX;
+    dragOffsetRef.current = 0;
+    ripZoneRef.current?.setPointerCapture?.(e.pointerId);
+  }, []);
+
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragStartRef.current) return;
-    const dx = e.clientX - dragStartRef.current.x;
+    if (dragStartXRef.current === null) return;
+    const dx = e.clientX - dragStartXRef.current;
+    dragOffsetRef.current = dx;
     setDragOffset(dx);
   }, []);
-  const handlePointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      if (!dragStartRef.current) return;
-      const dx = dragOffset;
-      const threshold = 50;
-      const startTarget = dragStartRef.current.target as HTMLElement | null;
-      if (dx < -threshold) goNext();
-      else if (dx > threshold) goPrev();
-      else if (Math.abs(dx) < 10) {
-        // Tap: zone-based or card-based
-        const hitPrev = startTarget?.closest('[data-prev-card]');
-        const hitNext = startTarget?.closest('[data-next-card]');
-        if (hitPrev && index > 0) goPrev();
-        else if (hitNext && index < cards.length - 1) goNext();
-        else {
-          const rect = ripZoneRef.current?.getBoundingClientRect();
-          if (rect) {
-            const x = e.clientX - rect.left;
-            const w = rect.width;
-            if (x < w / 3 && index > 0) goPrev();
-            else if (x > (2 * w) / 3 && index < cards.length - 1) goNext();
-          }
-        }
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    if (dragStartXRef.current === null) return;
+    const dx = dragOffsetRef.current;
+    const threshold = 50;
+
+    if (dx < -threshold) goNext();
+    else if (dx > threshold) goPrev();
+    else if (Math.abs(dx) < 10) {
+      const rect = ripZoneRef.current?.getBoundingClientRect();
+      if (rect) {
+        const x = e.clientX - rect.left;
+        const w = rect.width;
+        if (x < w / 3) goPrev();
+        else if (x > (2 * w) / 3) goNext();
       }
-      setDragOffset(0);
-      dragStartRef.current = null;
-    },
-    [dragOffset, goPrev, goNext, index, cards.length]
-  );
+    }
+
+    setDragOffset(0);
+    dragOffsetRef.current = 0;
+    dragStartXRef.current = null;
+  }, [goPrev, goNext]);
+
   const handlePointerCancel = useCallback(() => {
     setDragOffset(0);
-    dragStartRef.current = null;
+    dragOffsetRef.current = 0;
+    dragStartXRef.current = null;
   }, []);
 
   if (cards.length === 0) return null;
@@ -104,16 +146,17 @@ export function PackRevealSlider({ cards, onCardHover, onCurrentCardChange }: Pa
   const prevCard = index > 0 ? cards[index - 1]! : null;
   const nextCard = index < cards.length - 1 ? cards[index + 1]! : null;
   const current = cards[index]!;
-
   const ripOffset = dragOffset * 0.5;
+
+  const isMythicOrRare = current.rarity === 'mythic' || current.rarity === 'rare';
 
   return (
     <div className="relative w-full max-w-3xl mx-auto select-none">
       <p className="text-center text-cream-muted text-sm mb-3">
-        Swipe or drag to rip through the pack · Card {index + 1} of {cards.length}
+        Swipe or use arrow keys · Card {index + 1} of {cards.length}
       </p>
 
-      {/* Main rip zone - tap left/right to flip, drag to swipe */}
+      {/* Rip zone — owns the full pointer stream */}
       <div
         ref={el => { ripZoneRef.current = el; }}
         className="relative flex items-center justify-center min-h-[340px] touch-none cursor-grab active:cursor-grabbing"
@@ -123,78 +166,105 @@ export function PackRevealSlider({ cards, onCardHover, onCurrentCardChange }: Pa
         onPointerLeave={handlePointerCancel}
         onPointerCancel={handlePointerCancel}
       >
-        {/* Card stack: prev | current | next */}
-        <div className="relative flex items-center justify-center gap-2">
-          {/* Previous card - left */}
+        <div className="relative flex items-center justify-center gap-2 pointer-events-none">
+          {/* Previous card */}
           {prevCard && (
             <div
-              data-prev-card
-              className="shrink-0 transition-transform duration-150 cursor-pointer"
-              style={{
-                transform: `translateX(${ripOffset}px) scale(0.72)`,
-                opacity: 0.9,
-              }}
-              onMouseEnter={() => onCardHover?.(prevCard)}
-              onClick={() => goPrev()}
+              className="shrink-0 transition-transform duration-150"
+              style={{ transform: `translateX(${ripOffset}px) scale(0.72)`, opacity: 0.9 }}
             >
               <MiniCard card={prevCard} />
             </div>
           )}
 
-          {/* Current card - center */}
+          {/* Current card with flip animation */}
           <div
-            className="relative shrink-0 transition-transform duration-150"
-            style={{ transform: `translateX(${ripOffset}px)` }}
-            onMouseEnter={() => onCardHover?.(current)}
+            className="shrink-0"
+            style={{
+              transform: `translateX(${ripOffset}px)`,
+              perspective: '800px',
+            }}
           >
             <div
-              className="relative rounded-xl overflow-hidden shadow-2xl ring-2 ring-cyan/50"
-              style={{ width: 223, height: 311 }}
+              style={{
+                width: 223,
+                height: 311,
+                transformStyle: 'preserve-3d',
+                transform: flipState === 'flipping' ? 'rotateY(90deg)' : 'rotateY(0deg)',
+                transition: flipState === 'flipping'
+                  ? 'transform 0.16s ease-in'
+                  : 'transform 0.16s ease-out',
+              }}
             >
-              {getCardImageUrl(current, 'normal') ? (
-                <img
-                  src={getCardImageUrl(current, 'normal')!}
-                  alt={current.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-navy-light flex items-center justify-center text-cream-muted text-sm p-4">
-                  {current.name}
-                </div>
-              )}
-              {current.isFoilPull && (
-                <div className="absolute top-2 right-2 bg-magenta text-cream text-xs font-bold px-2 py-1 rounded-full">
-                  FOIL
-                </div>
-              )}
+              <div
+                className={`
+                  absolute inset-0 rounded-xl overflow-hidden shadow-2xl
+                  ${isMythicOrRare ? (current.rarity === 'mythic' ? 'ring-2 ring-magenta' : 'ring-2 ring-cyan') : 'ring-2 ring-cyan/50'}
+                `}
+                style={{ backfaceVisibility: 'hidden' }}
+              >
+                {getCardImageUrl(current, 'normal') ? (
+                  <img
+                    src={getCardImageUrl(current, 'normal')!}
+                    alt={current.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-navy-light flex items-center justify-center text-cream-muted text-sm p-4">
+                    {current.name}
+                  </div>
+                )}
+                {current.isFoilPull && (
+                  <div className="absolute top-2 right-2 bg-magenta text-cream text-xs font-bold px-2 py-1 rounded-full">
+                    FOIL
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Next card - right */}
+          {/* Next card */}
           {nextCard && (
             <div
-              data-next-card
-              className="shrink-0 transition-transform duration-150 cursor-pointer"
-              style={{
-                transform: `translateX(${ripOffset}px) scale(0.72)`,
-                opacity: 0.9,
-              }}
-              onMouseEnter={() => onCardHover?.(nextCard)}
-              onClick={() => goNext()}
+              className="shrink-0 transition-transform duration-150"
+              style={{ transform: `translateX(${ripOffset}px) scale(0.72)`, opacity: 0.9 }}
             >
               <MiniCard card={nextCard} />
             </div>
           )}
         </div>
+
+        {/* Mythic/rare reveal flash */}
+        {flashColor && (
+          <div
+            className="absolute inset-0 rounded-xl pointer-events-none"
+            style={{
+              background: `radial-gradient(ellipse at center, ${flashColor} 0%, transparent 70%)`,
+              animation: 'none',
+              opacity: 1,
+              transition: 'opacity 0.4s ease-out',
+            }}
+          />
+        )}
       </div>
 
-      {/* Dot nav - below */}
-      <div className="flex justify-center gap-2 mt-6 flex-wrap">
+      {/* Card name + rarity label under slider */}
+      <div className="text-center mt-2 mb-1 h-5">
+        {current.rarity === 'mythic' && (
+          <span className="text-magenta text-sm font-bold tracking-wide animate-pulse">✦ Mythic Rare ✦</span>
+        )}
+        {current.rarity === 'rare' && (
+          <span className="text-cyan text-sm font-semibold">◆ Rare</span>
+        )}
+      </div>
+
+      {/* Dot nav */}
+      <div className="flex justify-center gap-2 mt-3 flex-wrap">
         {cards.map((_, i) => (
           <button
             key={i}
             type="button"
-            onClick={() => setIndex(i)}
+            onClick={() => navigateTo(i)}
             className={`h-2 rounded-full transition-all ${i === index ? 'w-6 bg-cyan' : 'w-2 bg-cyan-dim hover:bg-cyan-dim/80'}`}
             aria-label={`Go to card ${i + 1}`}
           />
