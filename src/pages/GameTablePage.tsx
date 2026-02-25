@@ -10,6 +10,7 @@ import GameActionLog from '../components/game/GameActionLog';
 import ScryOverlay from '../components/game/ScryOverlay';
 import DeckImportModal from '../components/game/DeckImportModal';
 import type { BattlefieldCard } from '../types/game';
+import { CardPreviewProvider } from '../components/game/CardHoverPreview';
 
 export default function GameTablePage() {
   const {
@@ -22,24 +23,19 @@ export default function GameTablePage() {
   const [atTable, setAtTable] = useState(false);
   const [showImportAfterJoin, setShowImportAfterJoin] = useState(false);
 
-  // Not yet in a room — show lobby
   if (!room || !atTable) {
     return (
       <GameLobby
         onEnterTable={(sandbox) => {
           setAtTable(true);
-          // Don't auto-show import modal for sandbox (it already has cards)
           setShowImportAfterJoin(!sandbox);
         }}
       />
     );
   }
 
-  // Separate opponents from self
   const allPlayers = Object.values(room.players);
   const opponents = allPlayers.filter(p => p.playerId !== playerId);
-
-  // My cards on battlefield
   const myBfCards: BattlefieldCard[] = myBattlefieldCards;
 
   const handleConcede = () => {
@@ -49,10 +45,11 @@ export default function GameTablePage() {
   };
 
   return (
+    <CardPreviewProvider>
     <div className="flex flex-col h-screen bg-navy text-cream overflow-hidden">
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-2 bg-navy-light border-b border-cyan-dim shrink-0 z-20">
+      <div className="flex items-center justify-between px-4 py-2 bg-navy-light border-b border-cyan-dim/50 shrink-0 z-20">
         <div className="flex items-center gap-3">
           <button
             onClick={() => { leaveGame(); setAtTable(false); }}
@@ -89,22 +86,22 @@ export default function GameTablePage() {
       </div>
 
       {/* ── Main area ───────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-h-0">
 
         {/* ── Left sidebar: controls + log ──────────────────────────────── */}
-        <div className="w-52 shrink-0 flex flex-col border-r border-cyan-dim/30 bg-navy">
+        <div className="w-44 shrink-0 flex flex-col border-r border-cyan-dim/30 bg-navy overflow-y-auto">
           <GameControls onConcede={handleConcede} />
-          <div className="flex-1 border-t border-cyan-dim/30 overflow-hidden">
+          <div className="flex-1 border-t border-cyan-dim/30 overflow-hidden min-h-0">
             <GameActionLog actions={room.actionLog} />
           </div>
         </div>
 
         {/* ── Center: opponents + my battlefield + my hand ──────────────── */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
 
           {/* Opponents section */}
           {opponents.length > 0 && (
-            <div className="shrink-0 p-2 space-y-2 border-b border-cyan-dim/30 bg-navy/50 max-h-[55%] overflow-y-auto">
+            <div className="shrink-0 border-b border-cyan-dim/30 bg-navy/50 overflow-y-auto" style={{ maxHeight: '40%' }}>
               {opponents.map(opp => (
                 <OpponentView key={opp.playerId} player={opp} />
               ))}
@@ -112,10 +109,10 @@ export default function GameTablePage() {
           )}
 
           {/* My battlefield */}
-          <div className="flex-1 p-2 overflow-hidden flex flex-col">
+          <div className="flex-1 p-2 overflow-hidden min-h-0">
             <BattlefieldZone
               cards={myBfCards}
-              label="Your Battlefield"
+              label={myPlayer?.playerName ? `${myPlayer.playerName}'s Battlefield` : 'Your Battlefield'}
             />
           </div>
 
@@ -127,9 +124,9 @@ export default function GameTablePage() {
           )}
         </div>
 
-        {/* ── Right sidebar: player banner ──────────────────────────────── */}
+        {/* ── Right sidebar: player HUD ─────────────────────────────────── */}
         {myPlayer && (
-          <div className="w-64 shrink-0 border-l border-cyan-dim/30 bg-navy p-3 overflow-y-auto">
+          <div className="w-56 shrink-0 border-l border-cyan-dim/30 bg-navy overflow-y-auto">
             <PlayerBanner player={myPlayer} isCurrentPlayer />
           </div>
         )}
@@ -140,10 +137,11 @@ export default function GameTablePage() {
         <ScryOverlay cards={scryCards} instanceIds={scryInstanceIds} />
       )}
 
-      {/* ── Deck import modal (prompted after joining) ──────────────────── */}
+      {/* ── Deck import modal ──────────────────────────────────────────── */}
       {showImportAfterJoin && (
         <DeckImportModal onClose={() => setShowImportAfterJoin(false)} />
       )}
     </div>
+    </CardPreviewProvider>
   );
 }

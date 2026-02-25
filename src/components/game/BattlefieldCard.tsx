@@ -2,6 +2,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import type { BattlefieldCard as BFCard } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
 import CardContextMenu from './CardContextMenu';
+import { useCardPreview } from './CardHoverPreview';
 
 interface BattlefieldCardProps {
   card: BFCard;
@@ -27,6 +28,7 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
 
   const isOwner = card.controller === playerId;
   const isFaceDown = card.faceDown;
+  const cardPreview = useCardPreview(isFaceDown ? null : card.imageUri, card.name);
 
   // Convert percentage coords → pixel offset within container
   const pctToStyle = (pctX: number, pctY: number) => ({
@@ -147,6 +149,9 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
         onPointerUp={onPointerUp}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
+        onMouseEnter={cardPreview.onMouseEnter}
+        onMouseMove={cardPreview.onMouseMove}
+        onMouseLeave={cardPreview.onMouseLeave}
       >
         {/* Card image or face-down back */}
         <div className={`w-full h-full rounded-lg overflow-hidden border-2 ${borderColor} shadow-lg`}>
@@ -163,6 +168,7 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
               alt={card.name}
               className="w-full h-full object-cover pointer-events-none"
               draggable={false}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
           ) : (
             <div className="w-full h-full bg-navy-light flex items-center justify-center p-1">

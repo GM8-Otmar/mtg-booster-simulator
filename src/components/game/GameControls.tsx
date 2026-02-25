@@ -24,7 +24,6 @@ export default function GameControls({ onConcede }: GameControlsProps) {
   const {
     drawCards, shuffleLibrary, untapAll, tapAll,
     mulligan, createToken, sendMessage, myLibraryCount,
-    room,
   } = useGameTable();
 
   const [showImport, setShowImport] = useState(false);
@@ -48,7 +47,7 @@ export default function GameControls({ onConcede }: GameControlsProps) {
     <div className="flex flex-col gap-2 p-3">
 
       {/* Primary actions */}
-      <div className="grid grid-cols-2 gap-1">
+      <div className="flex flex-col gap-1">
         <button
           onClick={() => drawCards(1)}
           disabled={myLibraryCount === 0}
