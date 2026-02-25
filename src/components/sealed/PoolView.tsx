@@ -6,6 +6,94 @@ import type { ScryfallCard } from '../../types/card';
 import CardInspectPanel from './CardInspectPanel';
 import DeckExporter from './DeckExporter';
 
+// ── Deck stats ───────────────────────────────────────────────────────────────
+
+function parseCmc(card: ScryfallCard): number {
+  const raw = (card as any).cmc;
+  return typeof raw === 'number' ? Math.min(raw, 7) : 0;
+}
+
+const COLOR_META: { key: string; label: string; bg: string; text: string }[] = [
+  { key: 'W', label: 'W', bg: 'bg-yellow-100', text: 'text-yellow-900' },
+  { key: 'U', label: 'U', bg: 'bg-blue-400',   text: 'text-white' },
+  { key: 'B', label: 'B', bg: 'bg-gray-700',   text: 'text-white' },
+  { key: 'R', label: 'R', bg: 'bg-red-500',    text: 'text-white' },
+  { key: 'G', label: 'G', bg: 'bg-green-600',  text: 'text-white' },
+];
+
+function DeckStats({ deckCards, basicLandCounts }: { deckCards: ScryfallCard[]; basicLandCounts: Record<string, number> }) {
+  const nonLands = deckCards.filter(c => !c.type_line.toLowerCase().includes('land'));
+
+  // CMC buckets 0–7 (7 = 7+)
+  const curve: number[] = Array(8).fill(0);
+  for (const c of nonLands) curve[parseCmc(c)]++;
+  const maxBucket = Math.max(...curve, 1);
+
+  // Color pip counts
+  const colorCounts: Record<string, number> = { W: 0, U: 0, B: 0, R: 0, G: 0 };
+  for (const c of nonLands) {
+    for (const col of (c.colors ?? [])) {
+      if (col in colorCounts) colorCounts[col]++;
+    }
+  }
+  const basicMap: Record<string, string> = { Plains: 'W', Island: 'U', Swamp: 'B', Mountain: 'R', Forest: 'G' };
+  for (const [land, col] of Object.entries(basicMap)) {
+    colorCounts[col] = (colorCounts[col] ?? 0) + (basicLandCounts[land] ?? 0);
+  }
+  const totalPips = Object.values(colorCounts).reduce((a, b) => a + b, 0) || 1;
+
+  const total = deckCards.length;
+  if (total === 0) return null;
+
+  return (
+    <div className="bg-navy-light rounded-xl p-5 border border-cyan-dim">
+      <h2 className="text-xl font-semibold text-cream mb-4">Deck Stats</h2>
+
+      {/* Mana curve */}
+      <p className="text-sm text-cream-muted mb-2">Mana Curve (non-lands)</p>
+      <div className="flex items-end gap-1.5 h-20 mb-5">
+        {curve.map((count, cmc) => (
+          <div key={cmc} className="flex flex-col items-center gap-1 flex-1">
+            <span className="text-[10px] text-cream-muted">{count > 0 ? count : ''}</span>
+            <div
+              className="w-full rounded-t-sm bg-cyan transition-all duration-300"
+              style={{ height: `${(count / maxBucket) * 56}px`, minHeight: count > 0 ? 4 : 0 }}
+            />
+            <span className="text-[10px] text-cream-muted">{cmc === 7 ? '7+' : cmc}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Color split */}
+      <p className="text-sm text-cream-muted mb-2">Color Split</p>
+      <div className="flex gap-3 flex-wrap mb-5">
+        {COLOR_META.map(({ key, label, bg, text }) => {
+          const count = colorCounts[key] ?? 0;
+          const pct = Math.round((count / totalPips) * 100);
+          return (
+            <div key={key} className="flex flex-col items-center gap-1 min-w-[40px]">
+              <div className={`w-8 h-8 rounded-full ${bg} ${text} flex items-center justify-center text-xs font-bold shadow`}>
+                {label}
+              </div>
+              <span className="text-[10px] text-cream-muted">{pct > 0 ? `${pct}%` : '—'}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Quick health line */}
+      <div className="pt-3 border-t border-cyan-dim flex flex-wrap gap-4 text-xs text-cream-muted">
+        <span>Total: <span className={`font-bold ${total >= 40 ? 'text-cyan' : 'text-magenta'}`}>{total}</span></span>
+        <span>Non-lands: <span className="text-cream font-bold">{nonLands.length}</span></span>
+        <span>Lands: <span className="text-cream font-bold">{total - nonLands.length}</span></span>
+        {total < 40 && <span className="text-magenta font-semibold">Need {40 - total} more for 40-card sealed</span>}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 type FilterColor = 'W' | 'U' | 'B' | 'R' | 'G' | 'C';
 type FilterRarity = 'common' | 'uncommon' | 'rare' | 'mythic' | 'special' | 'bonus';
 type BasicLandName = 'Plains' | 'Island' | 'Swamp' | 'Mountain' | 'Forest';
@@ -371,6 +459,7 @@ export default function PoolView() {
             )}
           </div>
 
+          <DeckStats deckCards={expandedDeckCards} basicLandCounts={basicLandCounts} />
           <DeckExporter deckCards={expandedDeckCards} />
       </div>
     </div>

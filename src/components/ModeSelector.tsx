@@ -1,5 +1,5 @@
 interface ModeSelectorProps {
-  onSelectMode: (mode: 'random' | 'sealed') => void;
+  onSelectMode: (mode: 'random' | 'sealed' | 'game') => void;
 }
 
 export default function ModeSelector({ onSelectMode }: ModeSelectorProps) {
@@ -13,7 +13,7 @@ export default function ModeSelector({ onSelectMode }: ModeSelectorProps) {
           Choose your experience
         </p>
 
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="grid md:grid-cols-3 gap-8">
           {/* Random Pack Mode */}
           <button
             onClick={() => onSelectMode('random')}
@@ -79,6 +79,41 @@ export default function ModeSelector({ onSelectMode }: ModeSelectorProps) {
                 <li className="flex items-center gap-2">
                   <span className="text-magenta">•</span>
                   Export deck for untap.gg
+                </li>
+              </ul>
+            </div>
+          </button>
+
+          {/* Game Table Mode */}
+          <button
+            onClick={() => onSelectMode('game')}
+            className="group relative bg-navy-light rounded-xl p-8 border-2 border-cyan-dim hover:border-green-400 transition-all duration-300 hover:scale-105 text-left"
+          >
+            <div className="absolute inset-0 bg-green-900/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+
+            <div className="relative">
+              <h2 className="text-3xl font-bold mb-4 text-green-400">
+                Game Table
+              </h2>
+              <p className="text-cream-muted mb-4">
+                Play MTG online with friends — import any deck, any format!
+              </p>
+              <ul className="space-y-2 text-cream-muted">
+                <li className="flex items-center gap-2">
+                  <span className="text-green-400">•</span>
+                  Real-time multiplayer via WebSocket
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-400">•</span>
+                  Drag cards, tap/untap, move zones
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-400">•</span>
+                  Commander support with tax tracking
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-400">•</span>
+                  Import any Arena deck list
                 </li>
               </ul>
             </div>
