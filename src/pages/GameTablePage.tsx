@@ -111,7 +111,7 @@ export default function GameTablePage() {
           )}
 
           {/* My battlefield */}
-          <div className="flex-1 p-2 overflow-hidden min-h-0">
+          <div className="flex-1 p-2 overflow-hidden min-h-0 flex flex-col">
             <BattlefieldZone
               cards={myBfCards}
               label={myPlayer?.playerName ? `${myPlayer.playerName}'s Battlefield` : 'Your Battlefield'}
