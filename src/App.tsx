@@ -15,7 +15,7 @@ function App() {
       <div>
         <button
           onClick={() => setMode(null)}
-          className="fixed top-4 left-4 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors z-50 text-white"
+          className="fixed top-4 left-4 px-4 py-2 bg-navy-light hover:bg-navy-light/80 rounded-lg transition-colors z-50 text-cream border border-cyan-dim"
         >
           ← Back
         </button>
@@ -29,7 +29,7 @@ function App() {
       <div>
         <button
           onClick={() => setMode(null)}
-          className="fixed top-4 left-4 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors z-50 text-white"
+          className="fixed top-4 left-4 px-4 py-2 bg-navy-light hover:bg-navy-light/80 rounded-lg transition-colors z-50 text-cream border border-cyan-dim"
         >
           ← Back
         </button>

@@ -74,6 +74,11 @@ export interface ScryfallCard {
 
   // Double-faced cards use card_faces instead
   card_faces?: ScryfallCardFace[];
+
+  // Frame/treatment info for Collector Booster variants
+  frame_effects?: string[];
+  border_color?: string;
+  frame?: string;
 }
 
 /**

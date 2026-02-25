@@ -36,8 +36,8 @@ export function SetSelector({ selectedSet, onSetChange, disabled }: SetSelectorP
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-gray-400">
-        <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+      <div className="flex items-center gap-2 text-cream-muted">
+        <div className="w-5 h-5 border-2 border-cyan-dim border-t-transparent rounded-full animate-spin" />
         Loading sets...
       </div>
     );
@@ -49,7 +49,7 @@ export function SetSelector({ selectedSet, onSetChange, disabled }: SetSelectorP
 
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor="set-select" className="text-sm text-gray-400 uppercase tracking-wide">
+      <label htmlFor="set-select" className="text-sm text-cream-muted uppercase tracking-wide">
         Select Set
       </label>
       <select
@@ -57,7 +57,7 @@ export function SetSelector({ selectedSet, onSetChange, disabled }: SetSelectorP
         value={selectedSet}
         onChange={(e) => onSetChange(e.target.value)}
         disabled={disabled}
-        className="bg-gray-800 text-white border border-gray-600 rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        className="bg-navy-light text-cream border border-cyan-dim rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
       >
         {sets.map((set) => (
           <option key={set.id} value={set.code}>

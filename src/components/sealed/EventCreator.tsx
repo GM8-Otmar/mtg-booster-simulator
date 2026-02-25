@@ -45,60 +45,60 @@ export default function EventCreator() {
     const isHost = currentPlayer?.id === event.hostId;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-8">
+      <div className="min-h-screen bg-navy text-cream p-8">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl font-bold text-center mb-8 bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold text-center mb-8 text-cream">
             Event Lobby
           </h1>
 
           {/* Event Code */}
-          <div className="bg-gray-800 rounded-xl p-6 mb-6 border-2 border-purple-500">
+          <div className="bg-navy-light rounded-xl p-6 mb-6 border-2 border-magenta">
             <div className="text-center">
-              <p className="text-gray-400 mb-2">Event Code</p>
+              <p className="text-cream-muted mb-2">Event Code</p>
               <div className="flex items-center justify-center gap-4">
-                <p className="text-4xl font-mono font-bold text-purple-400">
+                <p className="text-4xl font-mono font-bold text-magenta">
                   {event.code}
                 </p>
                 <button
                   onClick={copyToClipboard}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                  className="px-4 py-2 bg-magenta hover:bg-magenta/90 rounded-lg transition-colors text-cream"
                 >
                   Copy Link
                 </button>
               </div>
-              <p className="text-gray-500 text-sm mt-2">
+              <p className="text-cream-muted text-sm mt-2">
                 Share this code with your friends
               </p>
             </div>
           </div>
 
           {/* Event Details */}
-          <div className="bg-gray-800 rounded-xl p-6 mb-6">
-            <h2 className="text-xl font-bold mb-4 text-purple-400">Event Details</h2>
-            <div className="grid grid-cols-2 gap-4 text-gray-300">
+          <div className="bg-navy-light rounded-xl p-6 mb-6 border border-cyan-dim">
+            <h2 className="text-xl font-bold mb-4 text-cyan">Event Details</h2>
+            <div className="grid grid-cols-2 gap-4 text-cream-muted">
               <div>
-                <span className="text-gray-500">Set:</span> {event.setCode.toUpperCase()}
+                <span className="text-cream-muted">Set:</span> {event.setCode.toUpperCase()}
               </div>
               <div>
-                <span className="text-gray-500">Type:</span> {event.boosterType === 'play' ? 'Play Booster' : 'Collector Booster'}
+                <span className="text-cream-muted">Type:</span> {event.boosterType === 'play' ? 'Play Booster' : 'Collector Booster'}
               </div>
             </div>
           </div>
 
           {/* Players List */}
-          <div className="bg-gray-800 rounded-xl p-6 mb-6">
-            <h2 className="text-xl font-bold mb-4 text-purple-400">
+          <div className="bg-navy-light rounded-xl p-6 mb-6 border border-cyan-dim">
+            <h2 className="text-xl font-bold mb-4 text-cyan">
               Players ({event.players.length})
             </h2>
             <div className="space-y-2">
               {event.players.map((player) => (
                 <div
                   key={player.id}
-                  className="flex items-center justify-between bg-gray-700 rounded-lg p-3"
+                  className="flex items-center justify-between bg-navy rounded-lg p-3 border border-cyan-dim"
                 >
-                  <span className="font-medium">{player.name}</span>
+                  <span className="font-medium text-cream">{player.name}</span>
                   {player.id === event.hostId && (
-                    <span className="text-xs bg-amber-500 text-gray-900 px-2 py-1 rounded-full font-bold">
+                    <span className="text-xs bg-magenta text-cream px-2 py-1 rounded-full font-bold">
                       HOST
                     </span>
                   )}
@@ -112,14 +112,14 @@ export default function EventCreator() {
             <button
               onClick={handleStartEvent}
               disabled={loading || event.players.length < 1}
-              className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="w-full py-4 bg-magenta hover:bg-magenta/90 rounded-xl font-bold text-lg text-cream disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {loading ? 'Starting...' : 'Start Event'}
             </button>
           )}
 
           {!isHost && (
-            <p className="text-center text-gray-400">
+            <p className="text-center text-cream-muted">
               Waiting for host to start the event...
             </p>
           )}
@@ -134,16 +134,16 @@ export default function EventCreator() {
 
   // Show event creation form
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-8">
+    <div className="min-h-screen bg-navy text-cream p-8">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-4xl font-bold text-center mb-8 bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
+        <h1 className="text-4xl font-bold text-center mb-8 text-cream">
           Create Sealed Event
         </h1>
 
-        <div className="bg-gray-800 rounded-xl p-8 space-y-6">
+        <div className="bg-navy-light rounded-xl p-8 space-y-6 border border-cyan-dim">
           {/* Player Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-cream-muted mb-2">
               Your Name
             </label>
             <input
@@ -151,13 +151,13 @@ export default function EventCreator() {
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
               placeholder="Enter your name"
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-white"
+              className="w-full px-4 py-3 bg-navy border border-cyan-dim rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan text-cream"
             />
           </div>
 
           {/* Set Selector */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-cream-muted mb-2">
               Magic Set
             </label>
             <SetSelector
@@ -168,7 +168,7 @@ export default function EventCreator() {
 
           {/* Booster Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-cream-muted mb-2">
               Booster Type
             </label>
             <BoosterTypeSelector
@@ -182,7 +182,7 @@ export default function EventCreator() {
           <button
             onClick={handleCreateEvent}
             disabled={loading || !playerName.trim() || !selectedSet}
-            className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="w-full py-4 bg-magenta hover:bg-magenta/90 rounded-xl font-bold text-lg text-cream disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             {loading ? 'Creating Event...' : 'Create Event'}
           </button>

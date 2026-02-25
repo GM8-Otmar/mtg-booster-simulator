@@ -1,17 +1,32 @@
-import { useState } from 'react';
-import { fetchBoosterPack, PackSimulationError } from '../api/scryfall';
+import { useState, useRef, useEffect } from 'react';
+import { fetchBoosterPack, getPackCards, PackSimulationError } from '../api/scryfall';
 import type { BoosterPack, BoosterType } from '../api/scryfall';
+import type { ScryfallCard } from '../types/card';
 import { CardGrid } from '../components/CardGrid';
+import { PackRevealSlider } from '../components/PackRevealSlider';
+import CardInspectPanel from '../components/sealed/CardInspectPanel';
 import { SetSelector } from '../components/SetSelector';
 import { BoosterTypeSelector } from '../components/BoosterTypeSelector';
+import { Package, Gem, Layers } from 'lucide-react';
 
 export default function RandomPackPage() {
   const [selectedSet, setSelectedSet] = useState<string>('');
   const [boosterType, setBoosterType] = useState<BoosterType>('play');
   const [pack, setPack] = useState<BoosterPack | null>(null);
+  const [sliderCurrentCard, setSliderCurrentCard] = useState<ScryfallCard | null>(null);
+  const [gridHoverCard, setGridHoverCard] = useState<ScryfallCard | null>(null);
+  const inspectCard = gridHoverCard ?? sliderCurrentCard;
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (pack) {
+      setGridHoverCard(null);
+    }
+  }, [pack]);
   const [progress, setProgress] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const sessionSeenIds = useRef<Set<string>>(new Set());
+  const lastFetchKey = useRef<string>('');
 
   const handleOpenPack = async () => {
     if (!selectedSet) return;
@@ -23,7 +38,14 @@ export default function RandomPackPage() {
 
     try {
       setProgress('Fetching cards...');
-      const fetchedPack = await fetchBoosterPack(selectedSet, boosterType);
+      const fetchKey = `${selectedSet}:${boosterType}`;
+      if (fetchKey !== lastFetchKey.current) {
+        sessionSeenIds.current.clear();
+        lastFetchKey.current = fetchKey;
+      }
+      const previouslySeen = sessionSeenIds.current.size > 0 ? sessionSeenIds.current : undefined;
+      const fetchedPack = await fetchBoosterPack(selectedSet, boosterType, { previouslySeenIds: previouslySeen });
+      getPackCards(fetchedPack).forEach(c => c?.id && sessionSeenIds.current.add(c.id));
       setProgress('');
       setPack(fetchedPack);
     } catch (err) {
@@ -42,19 +64,19 @@ export default function RandomPackPage() {
     }
   };
 
-  const buttonGradient = boosterType === 'collector'
-    ? 'from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 hover:shadow-purple-500/25'
-    : 'from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 hover:shadow-amber-500/25';
+  const buttonClasses = boosterType === 'collector'
+    ? 'bg-magenta hover:bg-magenta/90 text-cream shadow-lg shadow-magenta-dim'
+    : 'bg-cyan hover:bg-cyan/90 text-navy shadow-lg shadow-cyan-dim';
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white">
+    <div className="min-h-screen bg-navy text-cream">
       <div className="container mx-auto py-8 px-4 max-w-6xl">
         {/* Header */}
         <header className="text-center mb-10">
-          <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 bg-clip-text text-transparent">
+          <h1 className="text-5xl font-bold mb-2 text-cream">
             MTG Booster Simulator
           </h1>
-          <p className="text-gray-400">Open virtual booster packs from any Magic set</p>
+          <p className="text-cream-muted">Open virtual booster packs from any Magic set</p>
         </header>
 
         {/* Controls */}
@@ -77,22 +99,25 @@ export default function RandomPackPage() {
           <button
             onClick={handleOpenPack}
             disabled={loading || !selectedSet}
-            className={`bg-gradient-to-r ${buttonGradient} disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed text-black font-bold py-3 px-8 rounded-lg text-lg transition-all duration-200 shadow-lg cursor-pointer`}
+            className={`${buttonClasses} disabled:bg-navy-light disabled:text-cream-muted disabled:cursor-not-allowed font-bold py-3 px-8 rounded-lg text-lg transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 mx-auto`}
           >
             {loading ? (
-              <span className="flex items-center gap-2">
-                <span className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+              <>
+                <span className="w-5 h-5 border-2 border-cream border-t-transparent rounded-full animate-spin" />
                 Opening...
-              </span>
+              </>
             ) : (
-              `Open ${boosterType === 'collector' ? '💎 Collector' : '📦 Play'} Booster`
+              <>
+                {boosterType === 'collector' ? <Gem className="w-5 h-5" /> : <Package className="w-5 h-5" />}
+                Open {boosterType === 'collector' ? 'Collector' : 'Play'} Booster
+              </>
             )}
           </button>
         </div>
 
         {/* Progress */}
         {progress && (
-          <div className="text-center text-amber-400 mb-6 animate-pulse">
+          <div className="text-center text-cyan mb-6 animate-pulse">
             {progress}
           </div>
         )}
@@ -105,12 +130,21 @@ export default function RandomPackPage() {
         )}
 
         {/* Pack Contents */}
-        <CardGrid pack={pack} />
+        {pack && (
+          <>
+            <CardInspectPanel card={inspectCard} title="Pack Inspect" />
+            <div className="mb-10 pr-60">
+              <p className="text-center text-cream-muted text-sm mb-4">Use arrows or keyboard to flip through your pack</p>
+              <PackRevealSlider cards={getPackCards(pack)} onCurrentCardChange={setSliderCurrentCard} />
+            </div>
+            <CardGrid pack={pack} onCardHover={(c) => setGridHoverCard(c ?? null)} onCardLeave={() => setGridHoverCard(null)} />
+          </>
+        )}
 
         {/* Empty state */}
         {!pack && !loading && !error && (
-          <div className="text-center text-gray-500 py-20">
-            <div className="text-6xl mb-4">🎴</div>
+          <div className="text-center text-cream-muted py-20">
+            <Layers className="w-16 h-16 mx-auto mb-4 text-cyan-dim" />
             <p>Select a set and booster type, then click to open!</p>
           </div>
         )}

@@ -9,9 +9,10 @@ const EVENTS_DIR = path.join(process.cwd(), 'data', 'events');
  */
 async function ensureEventsDir(): Promise<void> {
   try {
-    await fs.access(EVENTS_DIR);
-  } catch {
     await fs.mkdir(EVENTS_DIR, { recursive: true });
+  } catch (err) {
+    console.error('Failed to create events directory:', EVENTS_DIR, err);
+    throw err;
   }
 }
 

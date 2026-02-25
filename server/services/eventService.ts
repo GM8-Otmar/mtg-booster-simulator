@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import { SealedEvent, Player, CreateEventRequest, BoosterPack } from '../types/server';
 import * as storage from './storageService';
 import axios from 'axios';
@@ -107,20 +108,33 @@ export async function startEvent(eventId: string, playerId: string): Promise<Sea
   return event;
 }
 
+/** Use crypto for better randomness (Node has crypto built-in) */
+function secureRandom(): number {
+  const buf = new Uint32Array(1);
+  crypto.randomFillSync(buf as any);
+  return buf[0]! / (0xffffffff + 1);
+}
+
+/** Cache-bust to reduce duplicate Scryfall responses */
+function cacheBust(): string {
+  return `${Date.now()}-${secureRandom().toString().slice(2, 10)}`;
+}
+
 /**
  * Helper to fetch pack from Scryfall (reusing frontend logic)
  */
-async function fetchPackFromScryfall(setCode: string, boosterType: 'play' | 'collector'): Promise<BoosterPack> {
-  // Import the pack generation logic from frontend
-  // For now, we'll make direct Scryfall API calls
-  // In production, you might want to move the pack generation logic to a shared module
-
+async function fetchPackFromScryfall(
+  setCode: string,
+  boosterType: 'play' | 'collector',
+  previouslySeenIds?: Set<string>
+): Promise<BoosterPack> {
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  const seenIds = new Set<string>(previouslySeenIds ?? []);
 
   async function fetchRandomCard(query: string): Promise<any> {
     try {
       const response = await axios.get(`${SCRYFALL_API}/cards/random`, {
-        params: { q: query }
+        params: { q: query, _: cacheBust() }
       });
       return response.data;
     } catch (error) {
@@ -128,17 +142,34 @@ async function fetchPackFromScryfall(setCode: string, boosterType: 'play' | 'col
     }
   }
 
-  async function fetchUniqueCards(query: string, count: number, seenIds: Set<string> = new Set(), markAsFoil = false): Promise<any[]> {
+  async function fetchUniqueWildcard(query: string, fallbackQuery: string): Promise<any> {
+    for (let i = 0; i < 12; i++) {
+      let card = await fetchRandomCard(query);
+      if (!card) card = await fetchRandomCard(fallbackQuery);
+      if (!card) return null;
+      if (!seenIds.has(card.id) && !previouslySeenIds?.has(card.id)) {
+        seenIds.add(card.id);
+        return card;
+      }
+      await delay(50);
+    }
+    const card = await fetchRandomCard(query) ?? await fetchRandomCard(fallbackQuery);
+    if (card) seenIds.add(card.id);
+    return card;
+  }
+
+  async function fetchUniqueCards(query: string, count: number, markAsFoil = false): Promise<any[]> {
     const cards: any[] = [];
     let retries = 0;
-    const maxRetries = count * 3;
+    const maxRetries = count * 8;
 
     while (cards.length < count && retries < maxRetries) {
       const card = await fetchRandomCard(query);
 
       if (!card) break;
 
-      if (!seenIds.has(card.id)) {
+      const alreadySeen = seenIds.has(card.id) || (previouslySeenIds?.has(card.id) ?? false);
+      if (!alreadySeen) {
         seenIds.add(card.id);
         if (markAsFoil) {
           cards.push({ ...card, isFoilPull: true });
@@ -149,14 +180,14 @@ async function fetchPackFromScryfall(setCode: string, boosterType: 'play' | 'col
         retries++;
       }
 
-      await delay(100);
+      await delay(50 + Math.floor(secureRandom() * 100));
     }
 
     return cards;
   }
 
   function rollRarity(weights: { common?: number; uncommon?: number; rare?: number; mythic?: number }): string {
-    const roll = Math.random();
+    const roll = secureRandom();
     let cumulative = 0;
 
     if (weights.common) {
@@ -174,25 +205,20 @@ async function fetchPackFromScryfall(setCode: string, boosterType: 'play' | 'col
     return 'mythic';
   }
 
-  const seenIds = new Set<string>();
-
   if (boosterType === 'play') {
     // Play Booster: 14 cards
-    const commons = await fetchUniqueCards(`set:${setCode} rarity:common`, 7, seenIds);
-    const uncommons = await fetchUniqueCards(`set:${setCode} rarity:uncommon`, 3, seenIds);
+    const commons = await fetchUniqueCards(`set:${setCode} rarity:common`, 7);
+    const uncommons = await fetchUniqueCards(`set:${setCode} rarity:uncommon`, 3);
 
     const wildcardRarity = rollRarity({ common: 0.70, uncommon: 0.20, rare: 0.09, mythic: 0.01 });
-    let wildcard = await fetchRandomCard(`set:${setCode} rarity:${wildcardRarity}`);
-    if (!wildcard) wildcard = await fetchRandomCard(`set:${setCode} rarity:common`);
+    let wildcard = await fetchUniqueWildcard(`set:${setCode} rarity:${wildcardRarity}`, `set:${setCode} rarity:common`);
 
-    const isMythic = Math.random() < 0.125;
+    const isMythic = secureRandom() < 0.125;
     const rareQuery = isMythic ? `set:${setCode} rarity:mythic` : `set:${setCode} rarity:rare`;
-    let rareOrMythic = await fetchRandomCard(rareQuery);
-    if (!rareOrMythic && isMythic) rareOrMythic = await fetchRandomCard(`set:${setCode} rarity:rare`);
+    let rareOrMythic = await fetchUniqueWildcard(rareQuery, `set:${setCode} rarity:rare`);
 
     const foilRarity = rollRarity({ common: 0.60, uncommon: 0.25, rare: 0.12, mythic: 0.03 });
-    let foilWildcard = await fetchRandomCard(`set:${setCode} rarity:${foilRarity}`);
-    if (!foilWildcard) foilWildcard = await fetchRandomCard(`set:${setCode} rarity:common`);
+    let foilWildcard = await fetchUniqueWildcard(`set:${setCode} rarity:${foilRarity}`, `set:${setCode} rarity:common`);
     if (foilWildcard) foilWildcard = { ...foilWildcard, isFoilPull: true };
 
     return {
@@ -203,30 +229,28 @@ async function fetchPackFromScryfall(setCode: string, boosterType: 'play' | 'col
       rareSlot: rareOrMythic,
       foilWildcard,
       cards: [...commons, ...uncommons, wildcard, rareOrMythic, foilWildcard].filter(Boolean),
-    };
+    } as BoosterPack;
   } else {
-    // Collector Booster: ~15 cards
-    const foilCommons = await fetchUniqueCards(`set:${setCode} rarity:common`, 5, seenIds, true);
-    const foilUncommons = await fetchUniqueCards(`set:${setCode} rarity:uncommon`, 4, seenIds, true);
+    // Collector Booster: ~15 cards with Booster Fun treatments (extended art, borderless, showcase)
+    const BOOSTER_FUN = '(frame:extendedart or frame:showcase or border:borderless)';
+    const foilCommons = await fetchUniqueCards(`set:${setCode} rarity:common`, 5, true);
+    const foilUncommons = await fetchUniqueCards(`set:${setCode} rarity:uncommon`, 4, true);
 
-    const rareCount = Math.random() < 0.5 ? 2 : 3;
+    const rareCount = secureRandom() < 0.5 ? 2 : 3;
     const raresOrMythics: any[] = [];
     for (let i = 0; i < rareCount; i++) {
-      const isMythic = Math.random() < 0.15;
-      const rareQuery = isMythic ? `set:${setCode} rarity:mythic` : `set:${setCode} rarity:rare`;
-      let card = await fetchRandomCard(rareQuery);
-      if (!card && isMythic) card = await fetchRandomCard(`set:${setCode} rarity:rare`);
-      if (card && !seenIds.has(card.id)) {
-        seenIds.add(card.id);
-        raresOrMythics.push(card);
-      }
+      const isMythic = secureRandom() < 0.15;
+      const rarity = isMythic ? 'mythic' : 'rare';
+      const treatmentQuery = `set:${setCode} ${BOOSTER_FUN} rarity:${rarity}`;
+      const card = await fetchUniqueWildcard(treatmentQuery, `set:${setCode} rarity:${rarity}`);
+      if (card) raresOrMythics.push(card);
       await delay(100);
     }
 
-    const foilIsMythic = Math.random() < 0.15;
-    const foilRareQuery = foilIsMythic ? `set:${setCode} rarity:mythic` : `set:${setCode} rarity:rare`;
-    let foilRare = await fetchRandomCard(foilRareQuery);
-    if (!foilRare && foilIsMythic) foilRare = await fetchRandomCard(`set:${setCode} rarity:rare`);
+    const foilIsMythic = secureRandom() < 0.15;
+    const foilRarity = foilIsMythic ? 'mythic' : 'rare';
+    const foilTreatmentQuery = `set:${setCode} ${BOOSTER_FUN} rarity:${foilRarity}`;
+    let foilRare = await fetchUniqueWildcard(foilTreatmentQuery, `set:${setCode} rarity:${foilRarity}`);
     if (foilRare) foilRare = { ...foilRare, isFoilPull: true };
 
     return {
@@ -236,7 +260,7 @@ async function fetchPackFromScryfall(setCode: string, boosterType: 'play' | 'col
       raresOrMythics,
       foilRareOrMythic: foilRare,
       cards: [...foilCommons, ...foilUncommons, ...raresOrMythics, foilRare].filter(Boolean),
-    };
+    } as BoosterPack;
   }
 }
 
@@ -263,8 +287,12 @@ export async function openNextPack(eventId: string, playerId: string): Promise<{
     throw new Error('All packs have been opened');
   }
 
-  // Fetch pack from Scryfall
-  const pack = await fetchPackFromScryfall(event.setCode, event.boosterType);
+  // Build set of card IDs already in pool (packs 2-6) to reduce duplicates
+  const previouslySeenIds = player.pool.length > 0
+    ? new Set(player.pool.map(c => c.id))
+    : undefined;
+
+  const pack = await fetchPackFromScryfall(event.setCode, event.boosterType, previouslySeenIds);
 
   // Add cards to player's pool
   player.pool.push(...pack.cards);

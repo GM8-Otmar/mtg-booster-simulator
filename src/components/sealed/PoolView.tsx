@@ -189,20 +189,20 @@ export default function PoolView() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-4xl font-bold text-center bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
+      <h1 className="text-4xl font-bold text-center text-cream">
         Sealed Pool Builder
       </h1>
 
-      <div className="grid lg:grid-cols-[1fr,320px] gap-6 items-start">
-        <div className="space-y-6">
-          <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
-            <h2 className="text-xl font-semibold text-white mb-3">Pool Filters</h2>
-            <p className="text-gray-400 text-sm mb-4">
+      <CardInspectPanel card={inspectCard} title="Pool Inspect" />
+      <div className="space-y-6 max-w-5xl mx-auto">
+          <div className="bg-navy-light rounded-xl p-5 border border-cyan-dim">
+            <h2 className="text-xl font-semibold text-cream mb-3">Pool Filters</h2>
+            <p className="text-cream-muted text-sm mb-4">
               Multi-select colors and rarities. Selecting Red + Black includes multicolor/hybrid cards that contain either color.
             </p>
 
             <div className="mb-4">
-              <p className="text-sm text-gray-300 mb-2">Colors</p>
+              <p className="text-sm text-cream-muted mb-2">Colors</p>
               <div className="flex flex-wrap gap-2">
                 {COLOR_OPTIONS.map((color) => {
                   const active = selectedColors.includes(color);
@@ -211,7 +211,7 @@ export default function PoolView() {
                       key={color}
                       onClick={() => addColorFilter(color)}
                       className={`px-3 py-1.5 rounded-md text-sm font-semibold border ${
-                        active ? 'bg-purple-600 border-purple-400 text-white' : 'bg-gray-700 border-gray-600 text-gray-200'
+                        active ? 'bg-magenta border-magenta text-cream' : 'bg-navy border-cyan-dim text-cream-muted'
                       }`}
                     >
                       {color}
@@ -220,7 +220,7 @@ export default function PoolView() {
                 })}
                 <button
                   onClick={() => setSelectedColors([])}
-                  className="px-3 py-1.5 rounded-md text-sm bg-gray-700 border border-gray-600 text-gray-300"
+                  className="px-3 py-1.5 rounded-md text-sm bg-navy border border-cyan-dim text-cream-muted"
                 >
                   Clear
                 </button>
@@ -228,7 +228,7 @@ export default function PoolView() {
             </div>
 
             <div>
-              <p className="text-sm text-gray-300 mb-2">Rarity</p>
+              <p className="text-sm text-cream-muted mb-2">Rarity</p>
               <div className="flex flex-wrap gap-2">
                 {RARITY_OPTIONS.map((rarity) => {
                   const active = selectedRarities.includes(rarity);
@@ -237,7 +237,7 @@ export default function PoolView() {
                       key={rarity}
                       onClick={() => addRarityFilter(rarity)}
                       className={`px-3 py-1.5 rounded-md text-sm capitalize font-semibold border ${
-                        active ? 'bg-pink-600 border-pink-400 text-white' : 'bg-gray-700 border-gray-600 text-gray-200'
+                        active ? 'bg-cyan border-cyan text-navy' : 'bg-navy border-cyan-dim text-cream-muted'
                       }`}
                     >
                       {rarity}
@@ -246,7 +246,7 @@ export default function PoolView() {
                 })}
                 <button
                   onClick={() => setSelectedRarities([])}
-                  className="px-3 py-1.5 rounded-md text-sm bg-gray-700 border border-gray-600 text-gray-300"
+                  className="px-3 py-1.5 rounded-md text-sm bg-navy border border-cyan-dim text-cream-muted"
                 >
                   Clear
                 </button>
@@ -254,37 +254,37 @@ export default function PoolView() {
             </div>
           </div>
 
-          <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <div className="bg-navy-light rounded-xl p-5 border border-cyan-dim">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-              <h2 className="text-xl font-semibold text-white">Pool ({pool.length} cards)</h2>
-              <p className="text-sm text-gray-400">Filtered unique cards: {filteredPoolEntries.length}</p>
+              <h2 className="text-xl font-semibold text-cream">Pool ({pool.length} cards)</h2>
+              <p className="text-sm text-cream-muted">Filtered unique cards: {filteredPoolEntries.length}</p>
             </div>
 
             <div className="space-y-8">
               {filteredByType.map(({ type, entries }) => (
                 <section key={type}>
-                  <h3 className="text-lg font-bold text-purple-300 mb-3">{type} ({entries.length})</h3>
+                  <h3 className="text-lg font-bold text-cyan mb-3">{type} ({entries.length})</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
                     {entries.map(({ card, count }) => {
                       const inDeck = deckCounts[card.id] ?? 0;
                       return (
-                        <div key={card.id} className="bg-gray-900/60 rounded-lg p-2" onMouseEnter={() => setInspectCard(card)}>
+                        <div key={card.id} className="bg-navy/80 rounded-lg p-2 border border-cyan-dim" onMouseEnter={() => setInspectCard(card)}>
                           <CardDisplay card={card} enableZoom={false} />
-                          <div className="mt-2 text-xs text-gray-300">
+                          <div className="mt-2 text-xs text-cream-muted">
                             Pool: {count} | Deck: {inDeck}
                           </div>
                           <div className="mt-2 flex gap-2">
                             <button
                               onClick={() => addToDeck(card.id, count)}
                               disabled={inDeck >= count}
-                              className="flex-1 px-2 py-1.5 rounded bg-green-700 hover:bg-green-600 disabled:opacity-40 text-xs font-semibold"
+                              className="flex-1 px-2 py-1.5 rounded bg-cyan hover:bg-cyan/90 disabled:opacity-40 text-xs font-semibold text-navy"
                             >
                               Add
                             </button>
                             <button
                               onClick={() => removeFromDeck(card.id)}
                               disabled={inDeck === 0}
-                              className="flex-1 px-2 py-1.5 rounded bg-red-700 hover:bg-red-600 disabled:opacity-40 text-xs font-semibold"
+                              className="flex-1 px-2 py-1.5 rounded bg-magenta hover:bg-magenta/90 disabled:opacity-40 text-xs font-semibold text-cream"
                             >
                               Remove
                             </button>
@@ -298,38 +298,38 @@ export default function PoolView() {
             </div>
 
             {filteredPoolEntries.length === 0 && (
-              <p className="text-center text-gray-400 mt-8">No cards match your current filters.</p>
+              <p className="text-center text-cream-muted mt-8">No cards match your current filters.</p>
             )}
           </div>
 
-          <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <div className="bg-navy-light rounded-xl p-5 border border-cyan-dim">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className="text-xl font-semibold text-white">Deck ({deckTotal} cards)</h2>
+              <h2 className="text-xl font-semibold text-cream">Deck ({deckTotal} cards)</h2>
               <button
                 onClick={resetDeck}
-                className="px-3 py-2 rounded-md text-sm bg-gray-700 hover:bg-gray-600 text-gray-200"
+                className="px-3 py-2 rounded-md text-sm bg-navy hover:bg-navy-light text-cream-muted border border-cyan-dim"
               >
                 Reset Deck
               </button>
             </div>
 
             <div className="mb-5">
-              <p className="text-sm text-gray-300 mb-2">Basic Lands (infinite pool)</p>
+              <p className="text-sm text-cream-muted mb-2">Basic Lands (infinite pool)</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {(Object.keys(BASIC_LAND_CARDS) as BasicLandName[]).map((land) => (
-                  <div key={land} className="bg-gray-900/60 rounded-md p-2">
-                    <p className="text-sm text-white mb-2">{land} ({basicLandCounts[land]})</p>
+                  <div key={land} className="bg-navy/80 rounded-md p-2 border border-cyan-dim">
+                    <p className="text-sm text-cream mb-2">{land} ({basicLandCounts[land]})</p>
                     <div className="flex gap-2">
                       <button
                         onClick={() => addBasicLand(land)}
-                        className="flex-1 px-2 py-1 rounded bg-green-700 hover:bg-green-600 text-xs"
+                        className="flex-1 px-2 py-1 rounded bg-cyan hover:bg-cyan/90 text-navy text-xs font-semibold"
                       >
                         +1
                       </button>
                       <button
                         onClick={() => removeBasicLand(land)}
                         disabled={basicLandCounts[land] === 0}
-                        className="flex-1 px-2 py-1 rounded bg-red-700 hover:bg-red-600 disabled:opacity-40 text-xs"
+                        className="flex-1 px-2 py-1 rounded bg-magenta hover:bg-magenta/90 disabled:opacity-40 text-cream text-xs font-semibold"
                       >
                         -1
                       </button>
@@ -343,12 +343,12 @@ export default function PoolView() {
               {deckPoolEntries.map(({ card, count }) => (
                 <button
                   key={card.id}
-                  className="w-full bg-gray-900/60 rounded-md px-3 py-2 flex items-center justify-between text-left hover:bg-gray-900"
+                  className="w-full bg-navy/80 rounded-md px-3 py-2 flex items-center justify-between text-left hover:bg-navy border border-cyan-dim"
                   onMouseEnter={() => setInspectCard(card)}
                   onClick={() => setInspectCard(card)}
                 >
-                  <span className="text-sm text-gray-100">{card.name}</span>
-                  <span className="text-xs text-gray-300">x{count}</span>
+                  <span className="text-sm text-cream">{card.name}</span>
+                  <span className="text-xs text-cream-muted">x{count}</span>
                 </button>
               ))}
               {(Object.keys(basicLandCounts) as BasicLandName[])
@@ -356,25 +356,22 @@ export default function PoolView() {
                 .map((land) => (
                   <button
                     key={land}
-                    className="w-full bg-gray-900/60 rounded-md px-3 py-2 flex items-center justify-between text-left hover:bg-gray-900"
+                    className="w-full bg-navy/80 rounded-md px-3 py-2 flex items-center justify-between text-left hover:bg-navy border border-cyan-dim"
                     onMouseEnter={() => setInspectCard(BASIC_LAND_CARDS[land])}
                     onClick={() => setInspectCard(BASIC_LAND_CARDS[land])}
                   >
-                    <span className="text-sm text-gray-100">{land}</span>
-                    <span className="text-xs text-gray-300">x{basicLandCounts[land]}</span>
+                    <span className="text-sm text-cream">{land}</span>
+                    <span className="text-xs text-cream-muted">x{basicLandCounts[land]}</span>
                   </button>
                 ))}
             </div>
 
             {deckTotal === 0 && (
-              <p className="text-gray-400 text-sm mt-3">Add cards from pool and basics to start building your deck.</p>
+              <p className="text-cream-muted text-sm mt-3">Add cards from pool and basics to start building your deck.</p>
             )}
           </div>
 
           <DeckExporter deckCards={expandedDeckCards} />
-        </div>
-
-        <CardInspectPanel card={inspectCard} />
       </div>
     </div>
   );

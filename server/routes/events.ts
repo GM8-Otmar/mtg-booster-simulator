@@ -20,7 +20,10 @@ router.post('/', async (req: Request, res: Response) => {
     res.json(result);
   } catch (error) {
     console.error('Error creating event:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to create event' });
+    const message = error instanceof Error ? error.message : 'Failed to create event';
+    const stack = error instanceof Error ? error.stack : undefined;
+    if (stack) console.error(stack);
+    res.status(500).json({ error: message });
   }
 });
 

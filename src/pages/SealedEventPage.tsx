@@ -4,6 +4,7 @@ import EventCreator from '../components/sealed/EventCreator';
 import EventJoin from '../components/sealed/EventJoin';
 import PackProgression from '../components/sealed/PackProgression';
 import PoolView from '../components/sealed/PoolView';
+import { Target, Link2 } from 'lucide-react';
 
 function SealedEventContent() {
   const { phase, leaveEvent } = useSealedEvent();
@@ -12,29 +13,29 @@ function SealedEventContent() {
   // Initial choice screen
   if (phase === 'idle' && !showCreateOrJoin) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-8 flex items-center justify-center">
+      <div className="min-h-screen bg-navy text-cream p-8 flex items-center justify-center">
         <div className="max-w-2xl w-full">
-          <h1 className="text-4xl font-bold text-center mb-8 bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold text-center mb-8 text-cream">
             Sealed Event
           </h1>
 
           <div className="grid md:grid-cols-2 gap-6">
             <button
               onClick={() => setShowCreateOrJoin('create')}
-              className="bg-gray-800 hover:bg-gray-700 rounded-xl p-8 border-2 border-purple-500 transition-all hover:scale-105"
+              className="bg-navy-light hover:border-magenta rounded-xl p-8 border-2 border-cyan-dim transition-all hover:scale-105 flex flex-col items-center text-center"
             >
-              <div className="text-4xl mb-4">🎯</div>
-              <h2 className="text-2xl font-bold text-purple-400 mb-2">Host Event</h2>
-              <p className="text-gray-300">Create a new sealed event and get a code to share</p>
+              <Target className="w-12 h-12 mb-4 text-magenta shrink-0" />
+              <h2 className="text-2xl font-bold text-magenta mb-2">Host Event</h2>
+              <p className="text-cream-muted">Create a new sealed event and get a code to share</p>
             </button>
 
             <button
               onClick={() => setShowCreateOrJoin('join')}
-              className="bg-gray-800 hover:bg-gray-700 rounded-xl p-8 border-2 border-pink-500 transition-all hover:scale-105"
+              className="bg-navy-light hover:border-cyan rounded-xl p-8 border-2 border-cyan-dim transition-all hover:scale-105 flex flex-col items-center text-center"
             >
-              <div className="text-4xl mb-4">🔗</div>
-              <h2 className="text-2xl font-bold text-pink-400 mb-2">Join Event</h2>
-              <p className="text-gray-300">Enter a code to join an existing event</p>
+              <Link2 className="w-12 h-12 mb-4 text-cyan shrink-0" />
+              <h2 className="text-2xl font-bold text-cyan mb-2">Join Event</h2>
+              <p className="text-cream-muted">Enter a code to join an existing event</p>
             </button>
           </div>
         </div>
@@ -63,13 +64,13 @@ function SealedEventContent() {
 
   if (phase === 'complete') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-8">
+      <div className="min-h-screen bg-navy text-cream p-8">
         <div className="max-w-7xl mx-auto">
           {/* Back Button */}
           <div className="mb-4">
             <button
               onClick={leaveEvent}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+              className="px-4 py-2 bg-navy-light hover:bg-navy-light/80 rounded-lg transition-colors text-cream"
             >
               ← Leave Event
             </button>

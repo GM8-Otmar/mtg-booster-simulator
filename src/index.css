@@ -1,6 +1,25 @@
 @import "tailwindcss";
 
+/* Neon Sideboard – Premium draft night. Retro-future, clean and intentional. */
+@theme {
+  --color-navy: #0B0F1A;
+  --color-navy-light: #141a2b;
+  --color-magenta: #FF2E88;
+  --color-magenta-dim: #ff2e8860;
+  --color-cyan: #19F0FF;
+  --color-cyan-dim: #19f0ff40;
+  --color-cream: #F5F3EF;
+  --color-cream-muted: #a39e96;
+}
+
 /* Custom base styles */
+:root {
+  --brand-navy: #0B0F1A;
+  --brand-magenta: #FF2E88;
+  --brand-cyan: #19F0FF;
+  --brand-cream: #F5F3EF;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
