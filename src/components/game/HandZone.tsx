@@ -144,10 +144,6 @@ function HandCard({
         {card.isCommander && (
           <div className="absolute -top-2 -right-2 bg-magenta rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow-md">★</div>
         )}
-        {/* Name tooltip on hover */}
-        <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap">
-          <span className="bg-navy text-cream text-[9px] rounded px-1.5 py-0.5 border border-cyan-dim shadow">{card.name}</span>
-        </div>
       </div>
 
       {/* Floating ghost that follows cursor while dragging */}

@@ -142,7 +142,7 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
   return (
     <>
       <div
-        className={`absolute select-none cursor-pointer group`}
+        className={`absolute select-none cursor-pointer`}
         style={{
           ...pctToStyle(visualPos.x, visualPos.y),
           width: CARD_W_PX,
@@ -162,7 +162,6 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
         <div className={`w-full h-full rounded-lg overflow-hidden border-2 ${borderColor} shadow-lg`}>
           {isFaceDown ? (
             <div className="w-full h-full bg-navy-light flex items-center justify-center rounded-lg">
-              {/* Card back pattern */}
               <div className="w-full h-full bg-gradient-to-br from-navy-light to-navy flex items-center justify-center">
                 <span className="text-2xl opacity-30">🃏</span>
               </div>
@@ -218,15 +217,6 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
         {/* Tap overlay */}
         {card.tapped && (
           <div className="absolute inset-0 rounded-lg ring-2 ring-yellow-400/50 pointer-events-none" />
-        )}
-
-        {/* Hover tooltip — card name on hover (especially for face-down) */}
-        {!isFaceDown && (
-          <div className="absolute -top-7 left-0 right-0 text-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30">
-            <span className="bg-navy text-cream text-[9px] rounded px-1 py-0.5 whitespace-nowrap border border-cyan-dim shadow">
-              {card.name}
-            </span>
-          </div>
         )}
       </div>
 
