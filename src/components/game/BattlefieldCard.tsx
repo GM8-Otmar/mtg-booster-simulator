@@ -2,7 +2,6 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import type { BattlefieldCard as BFCard } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
 import CardContextMenu from './CardContextMenu';
-import { useCardPreview } from './CardHoverPreview';
 import { useCardInspector } from './CardInspectorPanel';
 
 interface BattlefieldCardProps {
@@ -23,6 +22,7 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
 
   // Drag state — all in refs for zero stale-closure issues
   const draggingRef = useRef(false);
+  const pressedRef = useRef(false); // true only after pointerdown on this card
   const startClientRef = useRef({ x: 0, y: 0 });
   const startPctRef = useRef({ x: card.x, y: card.y });
   const lastEmitPctRef = useRef({ x: card.x, y: card.y });
@@ -30,7 +30,6 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
 
   const isOwner = card.controller === playerId;
   const isFaceDown = card.faceDown;
-  const cardPreview = useCardPreview(isFaceDown ? null : card.imageUri, card.name);
 
   // Convert percentage coords → pixel offset within container
   const pctToStyle = (pctX: number, pctY: number) => ({
@@ -52,9 +51,9 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button === 2 || !isOwner) return; // right-click handled separately
     e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
 
     draggingRef.current = false; // will flip to true on first move
+    pressedRef.current = true;
     movedRef.current = false;
     startClientRef.current = { x: e.clientX, y: e.clientY };
     startPctRef.current = { x: card.x, y: card.y };
@@ -62,7 +61,7 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
   }, [card.x, card.y, isOwner]);
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isOwner) return;
+    if (!isOwner || !pressedRef.current) return;
     const dx = e.clientX - startClientRef.current.x;
     const dy = e.clientY - startClientRef.current.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -108,6 +107,7 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
       }
     }
     draggingRef.current = false;
+    pressedRef.current = false;
   }, [card.instanceId, card.name, card.imageUri, containerRef, moveCard, isOwner, inspect, isFaceDown]);
 
   // ── Double-click: tap/untap ──────────────────────────────────────────────
@@ -142,7 +142,7 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
   return (
     <>
       <div
-        className={`absolute select-none cursor-pointer group`}
+        className={`absolute select-none cursor-pointer`}
         style={{
           ...pctToStyle(visualPos.x, visualPos.y),
           width: CARD_W_PX,
@@ -154,17 +154,14 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={() => { draggingRef.current = false; pressedRef.current = false; }}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
-        onMouseEnter={cardPreview.onMouseEnter}
-        onMouseMove={cardPreview.onMouseMove}
-        onMouseLeave={cardPreview.onMouseLeave}
       >
         {/* Card image or face-down back */}
         <div className={`w-full h-full rounded-lg overflow-hidden border-2 ${borderColor} shadow-lg`}>
           {isFaceDown ? (
             <div className="w-full h-full bg-navy-light flex items-center justify-center rounded-lg">
-              {/* Card back pattern */}
               <div className="w-full h-full bg-gradient-to-br from-navy-light to-navy flex items-center justify-center">
                 <span className="text-2xl opacity-30">🃏</span>
               </div>
@@ -220,15 +217,6 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
         {/* Tap overlay */}
         {card.tapped && (
           <div className="absolute inset-0 rounded-lg ring-2 ring-yellow-400/50 pointer-events-none" />
-        )}
-
-        {/* Hover tooltip — card name on hover (especially for face-down) */}
-        {!isFaceDown && (
-          <div className="absolute -top-7 left-0 right-0 text-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30">
-            <span className="bg-navy text-cream text-[9px] rounded px-1 py-0.5 whitespace-nowrap border border-cyan-dim shadow">
-              {card.name}
-            </span>
-          </div>
         )}
       </div>
 

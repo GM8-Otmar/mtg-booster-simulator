@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "tsx server/index.ts",
+    "dev:full": "concurrently -k -n vite,server -c cyan,magenta \"npm run dev\" \"npm run dev:server\"",
     "build": "tsc -b && vite build",
     "build:server": "tsc -p tsconfig.server.json",
     "start": "node dist-server/index.js",
@@ -36,6 +37,7 @@
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.0.18",
+    "concurrently": "^9.2.1",
     "cors": "^2.8.6",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",

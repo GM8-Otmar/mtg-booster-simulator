@@ -26,6 +26,7 @@ export default function BattlefieldZone({
   return (
     <div
       ref={containerRef}
+      data-battlefield
       className={`relative ${heightClass} bg-navy-light/30 rounded-xl border border-cyan-dim/30 overflow-hidden`}
       onContextMenu={onContextMenu}
     >
