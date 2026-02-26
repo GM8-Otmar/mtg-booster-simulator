@@ -4,20 +4,12 @@
  * Used as a React context so any card component can trigger it.
  */
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { type OracleData, getCachedOracle, fetchOracle } from '../../utils/scryfallOracle';
 
 interface InspectedCard {
   name: string;
   imageUri: string | null;
   instanceId: string;
-}
-
-interface OracleData {
-  typeLine: string;
-  oracleText: string;
-  manaCost: string;
-  power?: string;
-  toughness?: string;
-  loyalty?: string;
 }
 
 interface InspectorCtx {
@@ -48,39 +40,18 @@ export function useCardInspector() {
   return useContext(InspectorContext);
 }
 
-// Cache oracle data by card name
-const oracleCache = new Map<string, OracleData | null>();
-
 function useOracleData(name: string | null) {
   const [data, setData] = useState<OracleData | null | 'loading'>(null);
   const fetchedFor = useRef<string | null>(null);
 
   if (name && fetchedFor.current !== name) {
     fetchedFor.current = name;
-
-    if (oracleCache.has(name)) {
-      const cached = oracleCache.get(name)!;
+    const cached = getCachedOracle(name);
+    if (cached !== undefined) {
       if (data !== cached) setData(cached);
     } else {
       setData('loading');
-      fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`)
-        .then(r => r.json())
-        .then(card => {
-          const oracle: OracleData = {
-            typeLine: card.type_line ?? '',
-            oracleText: card.oracle_text ?? card.card_faces?.[0]?.oracle_text ?? '',
-            manaCost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? '',
-            power: card.power,
-            toughness: card.toughness,
-            loyalty: card.loyalty,
-          };
-          oracleCache.set(name, oracle);
-          setData(oracle);
-        })
-        .catch(() => {
-          oracleCache.set(name, null);
-          setData(null);
-        });
+      fetchOracle(name).then(oracle => setData(oracle));
     }
   }
 

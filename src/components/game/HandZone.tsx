@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { BattlefieldCard } from '../../types/game';
+import type { BattlefieldCard, GameZone } from '../../types/game';
 import CardContextMenu from './CardContextMenu';
 import { useGameTable } from '../../contexts/GameTableContext';
 import { useCardInspector } from './CardInspectorPanel';
@@ -11,7 +11,7 @@ interface HandZoneProps {
 function HandCard({
   card, i, total, fanAngle, startAngle,
   isSelected,
-  onContextMenu, onPlayToBattlefield, onToggleSelect,
+  onContextMenu, onPlayToBattlefield, onSendToZone, onToggleSelect,
 }: {
   card: BattlefieldCard;
   i: number;
@@ -21,6 +21,7 @@ function HandCard({
   isSelected: boolean;
   onContextMenu: (e: React.MouseEvent) => void;
   onPlayToBattlefield: (instanceId: string, clientX: number, clientY: number) => void;
+  onSendToZone: (instanceId: string, zone: string) => void;
   onToggleSelect: (instanceId: string) => void;
 }) {
   const { inspect } = useCardInspector();
@@ -39,20 +40,46 @@ function HandCard({
   useEffect(() => {
     if (!isDragging) return;
 
+    const clearHighlights = () => {
+      document.querySelectorAll('[data-drop-zone]').forEach(el => {
+        (el as HTMLElement).style.outline = '';
+      });
+    };
+
     const onMove = (e: PointerEvent) => {
       setDragPos({ x: e.clientX, y: e.clientY });
+
+      // Highlight any non-hand drop zone under cursor
+      clearHighlights();
+      const hits = document.elementsFromPoint(e.clientX, e.clientY);
+      const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
+      if (zoneEl && zoneEl.dataset.dropZone !== 'hand') {
+        zoneEl.style.outline = '3px solid rgba(0, 220, 255, 0.85)';
+      }
     };
 
     const onUp = (e: PointerEvent) => {
-      const dy = startY.current - e.clientY;
-      if (dy > 60) {
-        onPlayToBattlefield(card.instanceId, e.clientX, e.clientY);
+      clearHighlights();
+
+      // Zone drop takes priority over the "drag up" gesture
+      const hits = document.elementsFromPoint(e.clientX, e.clientY);
+      const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
+      const dropZone = zoneEl?.dataset.dropZone;
+
+      if (dropZone && dropZone !== 'hand') {
+        onSendToZone(card.instanceId, dropZone);
+      } else {
+        const dy = startY.current - e.clientY;
+        if (dy > 60) {
+          onPlayToBattlefield(card.instanceId, e.clientX, e.clientY);
+        }
       }
       setIsDragging(false);
       setIsHovered(false);
     };
 
     const onCancel = () => {
+      clearHighlights();
       setIsDragging(false);
       setIsHovered(false);
     };
@@ -64,8 +91,9 @@ function HandCard({
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onCancel);
+      clearHighlights();
     };
-  }, [isDragging, card.instanceId, onPlayToBattlefield]);
+  }, [isDragging, card.instanceId, onPlayToBattlefield, onSendToZone]);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button === 2) return;
@@ -185,7 +213,7 @@ function HandCard({
           </div>
           <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap">
             <span className="text-[10px] text-cyan bg-navy/80 px-2 py-0.5 rounded-full border border-cyan/40">
-              drag up to play
+              ↑ play · drag to GY / exile / library
             </span>
           </div>
         </div>
@@ -226,6 +254,16 @@ export default function HandZone({ cards }: HandZoneProps) {
       return next;
     });
   }, []);
+
+  // Send one card (or all selected) to any zone via drag
+  const handleSendToZone = useCallback((instanceId: string, zone: string) => {
+    const toSend = selectedIds.has(instanceId) && selectedIds.size > 1
+      ? [...selectedIds]
+      : [instanceId];
+    const toIndex = zone === 'library' ? 0 : undefined;
+    toSend.forEach(id => changeZone(id, zone as GameZone, toIndex));
+    setSelectedIds(new Set());
+  }, [changeZone, selectedIds]);
 
   // When a card is dragged to battlefield: if it's selected and others are too, play all selected
   const handlePlayToBattlefield = useCallback((instanceId: string, clientX: number, clientY: number) => {
@@ -296,6 +334,7 @@ export default function HandZone({ cards }: HandZoneProps) {
               setMenuInfo({ card, x: e.clientX, y: e.clientY });
             }}
             onPlayToBattlefield={handlePlayToBattlefield}
+            onSendToZone={handleSendToZone}
           />
         ))}
       </div>
