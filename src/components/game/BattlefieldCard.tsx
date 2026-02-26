@@ -9,21 +9,37 @@ interface BattlefieldCardProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
   isSelected?: boolean;
   onClearSelection?: () => void;
+  /** All currently-selected cards — forwarded to context menu for bulk actions */
+  selectedCards?: BFCard[];
+  /** Zone calls this instead of the card handling its own drag (multi-select mode) */
+  onMultiDragStart?: (instanceId: string, clientX: number, clientY: number) => void;
+  /** Zone-controlled position during a multi-drag */
+  multiDragPos?: { x: number; y: number };
+  /** True for the card the user grabbed to start the multi-drag */
+  isMultiDragLead?: boolean;
 }
 
 const CARD_W_PX = 80;
 const CARD_H_PX = 112;
 
-export default function BattlefieldCard({ card, containerRef, isSelected, onClearSelection }: BattlefieldCardProps) {
+export default function BattlefieldCard({
+  card,
+  containerRef,
+  isSelected,
+  onClearSelection,
+  selectedCards,
+  onMultiDragStart,
+  multiDragPos,
+  isMultiDragLead,
+}: BattlefieldCardProps) {
   const { moveCard, tapCard, changeZone, playerId } = useGameTable();
   const { inspect } = useCardInspector();
 
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  // isPressed triggers window-level listeners — the only way to not lose the card
+  // isPressed gates window-level listeners — keeps the card even at high mouse speed
   const [isPressed, setIsPressed] = useState(false);
 
-  // All drag bookkeeping in refs so window listeners never have stale closures
   const draggingRef = useRef(false);
   const movedRef = useRef(false);
   const draggingVisuallyRef = useRef(false);
@@ -34,26 +50,37 @@ export default function BattlefieldCard({ card, containerRef, isSelected, onClea
   const isOwner = card.controller === playerId;
   const isFaceDown = card.faceDown;
 
+  // During multi-drag the zone controls position; otherwise self-managed
+  const [visualPos, setVisualPos] = useState({ x: card.x, y: card.y });
+  const effectivePos = multiDragPos ?? visualPos;
+  // Show "dragging" styling either when self-dragging or leading a multi-drag
+  const effectiveDragging = isDragging || (!!isMultiDragLead && !!multiDragPos);
+
   const pctToStyle = (pctX: number, pctY: number) => ({
     left: `calc(${pctX}% - ${CARD_W_PX / 2}px)`,
     top: `calc(${pctY}% - ${CARD_H_PX / 2}px)`,
   });
 
-  const [visualPos, setVisualPos] = useState({ x: card.x, y: card.y });
-
   // Keep visual pos synced with server when not dragging
   useEffect(() => {
-    if (!draggingRef.current) {
+    if (!draggingRef.current && !multiDragPos) {
       setVisualPos({ x: card.x, y: card.y });
     }
-  }, [card.x, card.y]);
+  }, [card.x, card.y, multiDragPos]);
 
-  // ── Pointer down (on element) ────────────────────────────────────────────
+  // ── Pointer down ─────────────────────────────────────────────────────────
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button === 2 || !isOwner) return;
     e.stopPropagation();
-    // Clicking a card clears any active marquee selection
+
+    // If this card belongs to a multi-selection, hand the drag off to the zone
+    if (onMultiDragStart) {
+      onMultiDragStart(card.instanceId, e.clientX, e.clientY);
+      return;
+    }
+
+    // Single-card drag: clear any existing selection and handle ourselves
     onClearSelection?.();
     draggingRef.current = false;
     movedRef.current = false;
@@ -62,10 +89,9 @@ export default function BattlefieldCard({ card, containerRef, isSelected, onClea
     lastEmitPctRef.current = { x: card.x, y: card.y };
     dragOriginRef.current = { x: card.x, y: card.y };
     setIsPressed(true);
-  }, [card.x, card.y, isOwner, onClearSelection]);
+  }, [card.x, card.y, card.instanceId, isOwner, onClearSelection, onMultiDragStart]);
 
-  // ── Window-level listeners — active for the full duration of a press ─────
-  // This is the key fix: the card never "loses" the pointer even at high speed.
+  // ── Window-level listeners — single-card drag ────────────────────────────
 
   useEffect(() => {
     if (!isPressed) return;
@@ -79,8 +105,7 @@ export default function BattlefieldCard({ card, containerRef, isSelected, onClea
     const onMove = (e: PointerEvent) => {
       const dx = e.clientX - startClientRef.current.x;
       const dy = e.clientY - startClientRef.current.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (!draggingRef.current && dist < 4) return;
+      if (!draggingRef.current && Math.sqrt(dx * dx + dy * dy) < 4) return;
 
       draggingRef.current = true;
       movedRef.current = true;
@@ -104,7 +129,6 @@ export default function BattlefieldCard({ card, containerRef, isSelected, onClea
         lastEmitPctRef.current = { x: clampedX, y: clampedY };
       }
 
-      // Highlight any drop zone under the cursor
       clearZoneHighlights();
       const hits = document.elementsFromPoint(e.clientX, e.clientY);
       const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
@@ -117,7 +141,6 @@ export default function BattlefieldCard({ card, containerRef, isSelected, onClea
       clearZoneHighlights();
 
       if (draggingRef.current) {
-        // Check for a zone drop target anywhere on screen
         const hits = document.elementsFromPoint(e.clientX, e.clientY);
         const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
 
@@ -181,9 +204,12 @@ export default function BattlefieldCard({ card, containerRef, isSelected, onClea
 
   const borderColor = isOwner ? 'border-cyan/40' : 'border-magenta/40';
 
+  // Pass all selected cards to the menu when right-clicking a selected card
+  const bulkCards = isSelected && selectedCards && selectedCards.length > 1 ? selectedCards : undefined;
+
   return (
     <>
-      {/* Ghost outline at drag origin */}
+      {/* Ghost outline at drag origin (single-card drag only) */}
       {isDragging && (
         <div
           className="absolute pointer-events-none"
@@ -203,16 +229,16 @@ export default function BattlefieldCard({ card, containerRef, isSelected, onClea
       <div
         className="absolute select-none"
         style={{
-          ...pctToStyle(visualPos.x, visualPos.y),
+          ...pctToStyle(effectivePos.x, effectivePos.y),
           width: CARD_W_PX,
           height: CARD_H_PX,
           transform: card.tapped
-            ? `rotate(90deg)${isDragging ? ' scale(1.08)' : ''}`
-            : isDragging ? 'scale(1.08)' : undefined,
-          transition: isDragging ? 'none' : 'transform 0.15s ease',
-          zIndex: isDragging ? 50 : 10,
-          cursor: isDragging ? 'grabbing' : 'grab',
-          boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.65)' : undefined,
+            ? `rotate(90deg)${effectiveDragging ? ' scale(1.08)' : ''}`
+            : effectiveDragging ? 'scale(1.08)' : undefined,
+          transition: effectiveDragging ? 'none' : 'transform 0.15s ease',
+          zIndex: effectiveDragging ? 50 : 10,
+          cursor: effectiveDragging ? 'grabbing' : 'grab',
+          boxShadow: effectiveDragging ? '0 8px 24px rgba(0,0,0,0.65)' : undefined,
         }}
         onPointerDown={onPointerDown}
         onDoubleClick={onDoubleClick}
@@ -288,6 +314,7 @@ export default function BattlefieldCard({ card, containerRef, isSelected, onClea
           x={menuPos.x}
           y={menuPos.y}
           onClose={() => setMenuPos(null)}
+          selectedCards={bulkCards}
         />
       )}
     </>

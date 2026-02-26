@@ -7,6 +7,8 @@ interface CardContextMenuProps {
   x: number;
   y: number;
   onClose: () => void;
+  /** When provided (>1 card), all actions apply to every card in this array */
+  selectedCards?: BattlefieldCard[];
 }
 
 interface MenuSection {
@@ -20,7 +22,7 @@ interface MenuItem {
   danger?: boolean;
 }
 
-export default function CardContextMenu({ card, x, y, onClose }: CardContextMenuProps) {
+export default function CardContextMenu({ card, x, y, onClose, selectedCards }: CardContextMenuProps) {
   const {
     changeZone, tapCard, setFaceDown,
     addCounter, notifyCommanderCast,
@@ -47,9 +49,13 @@ export default function CardContextMenu({ card, x, y, onClose }: CardContextMenu
     };
   }, [onClose]);
 
+  // Bulk mode: actions apply to all selectedCards; single mode: just the one card
+  const isBulk = !!selectedCards && selectedCards.length > 1;
+  const targets = isBulk ? selectedCards! : [card];
   const isOwner = card.controller === playerId;
 
   const do_ = (fn: () => void) => { fn(); onClose(); };
+  const doAll = (fn: (c: BattlefieldCard) => void) => { targets.forEach(fn); onClose(); };
 
   const zones: { label: string; zone: GameZone; toIndex?: number }[] = [
     { label: 'Hand', zone: 'hand' },
@@ -63,77 +69,127 @@ export default function CardContextMenu({ card, x, y, onClose }: CardContextMenu
 
   const sections: MenuSection[] = [];
 
-  // Tap / untap
-  if (card.zone === 'battlefield') {
-    sections.push({
-      items: [
-        {
-          label: card.tapped ? 'Untap' : 'Tap',
-          action: () => do_(() => tapCard(card.instanceId, !card.tapped)),
-        },
-        {
-          label: card.faceDown ? 'Turn Face Up' : 'Turn Face Down',
-          action: () => do_(() => setFaceDown(card.instanceId, !card.faceDown)),
-        },
-      ],
-    });
-  }
+  if (isBulk) {
+    // ── Bulk mode ────────────────────────────────────────────────────────────
+    // Only show zones that at least one selected card isn't already in
+    const onBattlefield = targets.some(c => c.zone === 'battlefield');
 
-  // Move to zone
-  sections.push({
-    label: 'Move to…',
-    items: zones
-      .filter(z => !(z.zone === card.zone && z.toIndex === undefined))
-      .map(z => ({
+    if (onBattlefield) {
+      sections.push({
+        items: [
+          {
+            label: 'Tap all',
+            action: () => doAll(c => { if (c.zone === 'battlefield') tapCard(c.instanceId, true); }),
+          },
+          {
+            label: 'Untap all',
+            action: () => doAll(c => { if (c.zone === 'battlefield') tapCard(c.instanceId, false); }),
+          },
+        ],
+      });
+    }
+
+    sections.push({
+      label: 'Move all to…',
+      items: zones.map(z => ({
         label: z.label,
-        action: () => do_(() => changeZone(card.instanceId, z.zone, z.toIndex)),
+        action: () => doAll(c => changeZone(c.instanceId, z.zone, z.toIndex)),
       })),
-  });
-
-  // Counters
-  if (card.zone === 'battlefield') {
-    sections.push({
-      label: 'Counters',
-      items: [
-        {
-          label: '+1/+1 counter (+)',
-          action: () => do_(() => addCounter(card.instanceId, 'plus1plus1', 1)),
-        },
-        {
-          label: '+1/+1 counter (−)',
-          action: () => do_(() => addCounter(card.instanceId, 'plus1plus1', -1)),
-        },
-        {
-          label: '−1/−1 counter (+)',
-          action: () => do_(() => addCounter(card.instanceId, 'minus1minus1', 1)),
-        },
-        {
-          label: 'Loyalty counter (+)',
-          action: () => do_(() => addCounter(card.instanceId, 'loyalty', 1)),
-        },
-        {
-          label: 'Loyalty counter (−)',
-          action: () => do_(() => addCounter(card.instanceId, 'loyalty', -1)),
-        },
-        {
-          label: 'Charge counter (+)',
-          action: () => do_(() => addCounter(card.instanceId, 'charge', 1)),
-        },
-      ],
     });
-  }
 
-  // Commander-specific
-  if (card.isCommander && card.zone === 'command_zone') {
+    if (onBattlefield) {
+      sections.push({
+        label: 'Add counter to all',
+        items: [
+          {
+            label: '+1/+1 counter (+)',
+            action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'plus1plus1', 1); }),
+          },
+          {
+            label: '+1/+1 counter (−)',
+            action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'plus1plus1', -1); }),
+          },
+          {
+            label: '−1/−1 counter (+)',
+            action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'minus1minus1', 1); }),
+          },
+          {
+            label: 'Charge counter (+)',
+            action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'charge', 1); }),
+          },
+        ],
+      });
+    }
+  } else {
+    // ── Single-card mode (existing behaviour) ────────────────────────────────
+    if (card.zone === 'battlefield') {
+      sections.push({
+        items: [
+          {
+            label: card.tapped ? 'Untap' : 'Tap',
+            action: () => do_(() => tapCard(card.instanceId, !card.tapped)),
+          },
+          {
+            label: card.faceDown ? 'Turn Face Up' : 'Turn Face Down',
+            action: () => do_(() => setFaceDown(card.instanceId, !card.faceDown)),
+          },
+        ],
+      });
+    }
+
     sections.push({
-      label: 'Commander',
-      items: [
-        {
-          label: 'Cast Commander (pay tax)',
-          action: () => do_(() => notifyCommanderCast(card.instanceId)),
-        },
-      ],
+      label: 'Move to…',
+      items: zones
+        .filter(z => !(z.zone === card.zone && z.toIndex === undefined))
+        .map(z => ({
+          label: z.label,
+          action: () => do_(() => changeZone(card.instanceId, z.zone, z.toIndex)),
+        })),
     });
+
+    if (card.zone === 'battlefield') {
+      sections.push({
+        label: 'Counters',
+        items: [
+          {
+            label: '+1/+1 counter (+)',
+            action: () => do_(() => addCounter(card.instanceId, 'plus1plus1', 1)),
+          },
+          {
+            label: '+1/+1 counter (−)',
+            action: () => do_(() => addCounter(card.instanceId, 'plus1plus1', -1)),
+          },
+          {
+            label: '−1/−1 counter (+)',
+            action: () => do_(() => addCounter(card.instanceId, 'minus1minus1', 1)),
+          },
+          {
+            label: 'Loyalty counter (+)',
+            action: () => do_(() => addCounter(card.instanceId, 'loyalty', 1)),
+          },
+          {
+            label: 'Loyalty counter (−)',
+            action: () => do_(() => addCounter(card.instanceId, 'loyalty', -1)),
+          },
+          {
+            label: 'Charge counter (+)',
+            action: () => do_(() => addCounter(card.instanceId, 'charge', 1)),
+          },
+        ],
+      });
+    }
+
+    if (card.isCommander && card.zone === 'command_zone') {
+      sections.push({
+        label: 'Commander',
+        items: [
+          {
+            label: 'Cast Commander (pay tax)',
+            action: () => do_(() => notifyCommanderCast(card.instanceId)),
+          },
+        ],
+      });
+    }
   }
 
   // Viewport-clamp: measure actual menu height after mount, then clamp all edges
@@ -158,10 +214,19 @@ export default function CardContextMenu({ card, x, y, onClose }: CardContextMenu
       className="fixed z-[9999] bg-navy-light border border-cyan-dim rounded-xl shadow-2xl text-sm overflow-hidden"
       style={{ ...adjustedStyle, width: 220 }}
     >
-      {/* Card name header */}
+      {/* Header */}
       <div className="px-3 py-2 border-b border-cyan-dim bg-navy">
-        <p className="font-semibold text-cream truncate">{card.name}</p>
-        <p className="text-cream-muted text-xs capitalize">{card.zone.replace('_', ' ')}</p>
+        {isBulk ? (
+          <>
+            <p className="font-semibold text-cyan">{targets.length} cards selected</p>
+            <p className="text-cream-muted text-xs">bulk actions</p>
+          </>
+        ) : (
+          <>
+            <p className="font-semibold text-cream truncate">{card.name}</p>
+            <p className="text-cream-muted text-xs capitalize">{card.zone.replace('_', ' ')}</p>
+          </>
+        )}
       </div>
 
       {sections.map((section, si) => (
@@ -175,7 +240,7 @@ export default function CardContextMenu({ card, x, y, onClose }: CardContextMenu
             <button
               key={ii}
               onClick={item.action}
-              disabled={!isOwner && !['Move to…'].includes(section.label ?? '')}
+              disabled={!isOwner && !['Move to…', 'Move all to…'].includes(section.label ?? '')}
               className={`w-full text-left px-3 py-1.5 transition-colors
                 ${item.danger ? 'text-red-400 hover:bg-red-900/30' : 'text-cream hover:bg-cyan-dim/40'}
                 disabled:opacity-40 disabled:cursor-not-allowed`}
