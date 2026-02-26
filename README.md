@@ -1,6 +1,6 @@
-# MTG Booster Simulator & Sealed Event Platform
+# Kitchen Table Magic
 
-A web application for simulating Magic: The Gathering booster pack openings and hosting sealed events with friends!
+A web application for simulating Magic: The Gathering booster pack openings, hosting sealed events with friends, and playing multiplayer games at the kitchen table!
 
 ## 🎴 Features
 
@@ -11,7 +11,17 @@ A web application for simulating Magic: The Gathering booster pack openings and 
 - Real-time pricing from Scryfall
 - Pack value calculations
 
-### Sealed Event Mode (NEW!)
+### Game Table Mode
+- **Sandbox Mode**: Jump straight in with a prebuilt hand, no server needed
+- **Multiplayer**: Connect with friends via shareable room code
+- **Full Game Actions**: Draw, tap/untap, move cards, add counters, track life
+- **Drag to Zones**: Drag cards from battlefield to graveyard, exile, or hand
+- **Library Search**: Find any card in your library by name
+- **Commander Support**: Commander zone, tax tracking, damage dealt
+- **Scry & Mulligan**: Full rules-accurate library actions
+- **Card Inspector**: Click any card for full oracle text and art
+
+### Sealed Event Mode
 - **Host or Join Events**: Create events with shareable codes
 - **Multiplayer Support**: Play with friends on your local network
 - **6-Pack Sealed**: Open 6 packs to build your card pool
@@ -69,7 +79,7 @@ Share the ngrok URL (e.g., `https://abc-xyz.ngrok-free.app`)
 ## 📁 Project Structure
 
 ```
-mtg-booster-simulator/
+kitchen-table-magic/
 ├── server/                  # Backend (Express + Socket.io)
 │   ├── index.ts            # Server entry point
 │   ├── routes/             # API endpoints
@@ -219,4 +229,4 @@ This is a fan-made simulator for entertainment purposes. Not affiliated with or 
 
 ---
 
-Built with ❤️ for Magic players everywhere
+Built with ❤️ for kitchen table Magic players everywhere

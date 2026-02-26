@@ -126,7 +126,7 @@ export default function GameTablePage() {
 
         {/* ── Right sidebar: player HUD + card inspector ────────────────── */}
         {myPlayer && (
-          <div className="w-56 shrink-0 border-l border-cyan-dim/30 bg-navy flex flex-col overflow-hidden">
+          <div className="w-72 shrink-0 border-l border-cyan-dim/30 bg-navy flex flex-col overflow-hidden">
             {/* Player HUD — fixed height */}
             <div className="shrink-0 overflow-y-auto border-b border-cyan-dim/20" style={{ maxHeight: '55%' }}>
               <PlayerBanner player={myPlayer} isCurrentPlayer />

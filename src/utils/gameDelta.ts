@@ -29,7 +29,7 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       if (!card) return room;
       const oldZone = card.zone;
       const newCard = { ...card, zone: delta.toZone as GameZone };
-      const players = reZonePlayer(room.players, card.controller, delta.instanceId, oldZone, delta.toZone);
+      const players = reZonePlayer(room.players, card.controller, delta.instanceId, oldZone, delta.toZone, delta.toIndex);
       return {
         ...room,
         cards: { ...room.cards, [delta.instanceId]: newCard },
@@ -237,6 +237,7 @@ export function reZonePlayer(
   instanceId: string,
   fromZone: GameZone,
   toZone: GameZone,
+  toIndex?: number,
 ): Record<string, GamePlayerState> {
   const player = players[controllerId];
   if (!player) return players;
@@ -262,10 +263,13 @@ export function reZonePlayer(
     };
   }
   if (toKey) {
-    updated = {
-      ...updated,
-      [toKey]: [...(updated[toKey] as string[]), instanceId],
-    };
+    const toArr = [...(updated[toKey] as string[])];
+    if (toIndex !== undefined) {
+      toArr.splice(toIndex, 0, instanceId);
+    } else {
+      toArr.push(instanceId);
+    }
+    updated = { ...updated, [toKey]: toArr };
   }
 
   return { ...players, [controllerId]: updated };

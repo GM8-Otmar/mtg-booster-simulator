@@ -203,14 +203,14 @@ export default function HandZone({ cards }: HandZoneProps) {
 
   if (total === 0) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full" data-drop-zone="hand">
         <p className="text-cream-muted/30 text-xs">Empty hand</p>
       </div>
     );
   }
 
   return (
-    <div className="relative flex items-end justify-center h-full">
+    <div className="relative flex items-end justify-center h-full" data-drop-zone="hand">
       <div className="relative flex items-end" style={{ height: 112, minWidth: total * 36 + 44 }}>
         {cards.map((card, i) => (
           <HandCard

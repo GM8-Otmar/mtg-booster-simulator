@@ -105,7 +105,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
 
     room.lastActivity = ts();
     await storage.saveGame(room);
-    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'zone_changed', instanceId, toZone, log: room.actionLog.at(-1) });
+    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'zone_changed', instanceId, toZone, toIndex, log: room.actionLog.at(-1) });
   });
 
   // ── Tap / untap ───────────────────────────────────────────────────────────

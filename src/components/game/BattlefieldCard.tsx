@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import type { BattlefieldCard as BFCard } from '../../types/game';
+import type { BattlefieldCard as BFCard, GameZone } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
 import CardContextMenu from './CardContextMenu';
 import { useCardInspector } from './CardInspectorPanel';
@@ -14,7 +14,7 @@ const CARD_W_PX = 80;
 const CARD_H_PX = 112;
 
 export default function BattlefieldCard({ card, containerRef }: BattlefieldCardProps) {
-  const { moveCard, tapCard, playerId } = useGameTable();
+  const { moveCard, tapCard, changeZone, playerId } = useGameTable();
   const { inspect } = useCardInspector();
 
   // Context menu
@@ -27,9 +27,16 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
   const startPctRef = useRef({ x: card.x, y: card.y });
   const lastEmitPctRef = useRef({ x: card.x, y: card.y });
   const movedRef = useRef(false);
+  // Track when visual drag started (for ghost + styles, avoids stale closure in useCallback)
+  const draggingVisuallyRef = useRef(false);
 
   const isOwner = card.controller === playerId;
   const isFaceDown = card.faceDown;
+
+  // Visual drag state for styling (set when drag threshold crossed)
+  const [isDragging, setIsDragging] = useState(false);
+  // Position where drag originated (for ghost overlay)
+  const dragOriginRef = useRef({ x: card.x, y: card.y });
 
   // Convert percentage coords → pixel offset within container
   const pctToStyle = (pctX: number, pctY: number) => ({
@@ -46,6 +53,15 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
     }
   }, [card.x, card.y]);
 
+  // Clear drop-zone highlights when component unmounts mid-drag
+  useEffect(() => {
+    return () => {
+      document.querySelectorAll('[data-drop-zone]').forEach(el => {
+        (el as HTMLElement).style.outline = '';
+      });
+    };
+  }, []);
+
   // ── Pointer handlers ────────────────────────────────────────────────────
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
@@ -55,9 +71,11 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
     draggingRef.current = false; // will flip to true on first move
     pressedRef.current = true;
     movedRef.current = false;
+    draggingVisuallyRef.current = false;
     startClientRef.current = { x: e.clientX, y: e.clientY };
     startPctRef.current = { x: card.x, y: card.y };
     lastEmitPctRef.current = { x: card.x, y: card.y };
+    dragOriginRef.current = { x: card.x, y: card.y };
   }, [card.x, card.y, isOwner]);
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
@@ -70,6 +88,12 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
     draggingRef.current = true;
     movedRef.current = true;
     e.stopPropagation();
+
+    // Trigger visual drag state once on first move above threshold
+    if (!draggingVisuallyRef.current) {
+      draggingVisuallyRef.current = true;
+      setIsDragging(true);
+    }
 
     const container = containerRef.current;
     if (!container) return;
@@ -87,18 +111,45 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
       moveCard(card.instanceId, clampedX, clampedY, false);
       lastEmitPctRef.current = { x: clampedX, y: clampedY };
     }
+
+    // Highlight drop zones under cursor
+    const hits = document.elementsFromPoint(e.clientX, e.clientY);
+    const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
+    document.querySelectorAll('[data-drop-zone]').forEach(el => {
+      (el as HTMLElement).style.outline = '';
+    });
+    if (zoneEl) {
+      zoneEl.style.outline = '3px solid rgba(0, 220, 255, 0.85)';
+    }
   }, [card.instanceId, containerRef, moveCard, isOwner]);
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     if (!isOwner) return;
+
+    // Clear all drop-zone highlights
+    document.querySelectorAll('[data-drop-zone]').forEach(el => {
+      (el as HTMLElement).style.outline = '';
+    });
+
     if (draggingRef.current) {
-      const container = containerRef.current;
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        const finalX = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-        const finalY = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-        moveCard(card.instanceId, finalX, finalY, true); // persist
-        setVisualPos({ x: finalX, y: finalY });
+      // Check if dropped on a zone
+      const hits = document.elementsFromPoint(e.clientX, e.clientY);
+      const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
+
+      if (zoneEl) {
+        const targetZone = zoneEl.dataset.dropZone as GameZone;
+        changeZone(card.instanceId, targetZone);
+        // Reset visual pos — server will send authoritative update
+        setVisualPos({ x: dragOriginRef.current.x, y: dragOriginRef.current.y });
+      } else {
+        const container = containerRef.current;
+        if (container) {
+          const rect = container.getBoundingClientRect();
+          const finalX = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+          const finalY = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+          moveCard(card.instanceId, finalX, finalY, true); // persist
+          setVisualPos({ x: finalX, y: finalY });
+        }
       }
     } else {
       // Single click (no drag) → inspect
@@ -108,7 +159,9 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
     }
     draggingRef.current = false;
     pressedRef.current = false;
-  }, [card.instanceId, card.name, card.imageUri, containerRef, moveCard, isOwner, inspect, isFaceDown]);
+    draggingVisuallyRef.current = false;
+    setIsDragging(false);
+  }, [card.instanceId, card.name, card.imageUri, containerRef, moveCard, changeZone, isOwner, inspect, isFaceDown]);
 
   // ── Double-click: tap/untap ──────────────────────────────────────────────
 
@@ -141,20 +194,49 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
 
   return (
     <>
+      {/* Ghost at drag origin */}
+      {isDragging && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            ...pctToStyle(dragOriginRef.current.x, dragOriginRef.current.y),
+            width: CARD_W_PX,
+            height: CARD_H_PX,
+            border: '2px dashed rgba(0, 200, 255, 0.5)',
+            borderRadius: 8,
+            opacity: 0.4,
+            background: 'rgba(0, 0, 0, 0.2)',
+            zIndex: 8,
+          }}
+        />
+      )}
+
       <div
-        className={`absolute select-none cursor-pointer`}
+        className={`absolute select-none`}
         style={{
           ...pctToStyle(visualPos.x, visualPos.y),
           width: CARD_W_PX,
           height: CARD_H_PX,
-          transform: card.tapped ? 'rotate(90deg)' : undefined,
-          transition: draggingRef.current ? 'none' : 'transform 0.15s ease',
-          zIndex: draggingRef.current ? 50 : 10,
+          transform: card.tapped
+            ? `rotate(90deg)${isDragging ? ' scale(1.08)' : ''}`
+            : isDragging ? 'scale(1.08)' : undefined,
+          transition: isDragging ? 'none' : 'transform 0.15s ease',
+          zIndex: isDragging ? 50 : 10,
+          cursor: isDragging ? 'grabbing' : 'grab',
+          boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.65)' : undefined,
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={() => { draggingRef.current = false; pressedRef.current = false; }}
+        onPointerCancel={() => {
+          document.querySelectorAll('[data-drop-zone]').forEach(el => {
+            (el as HTMLElement).style.outline = '';
+          });
+          draggingRef.current = false;
+          pressedRef.current = false;
+          draggingVisuallyRef.current = false;
+          setIsDragging(false);
+        }}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
       >
