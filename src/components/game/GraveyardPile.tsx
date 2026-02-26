@@ -6,6 +6,7 @@ interface GraveyardPileProps {
   cards: BattlefieldCard[];
   label?: string;
   borderColor?: string;
+  dropZone?: string;
 }
 
 function GraveyardCard({ card, onContextMenu }: {
@@ -34,6 +35,7 @@ export default function GraveyardPile({
   cards,
   label = 'GY',
   borderColor = 'border-cyan-dim/60',
+  dropZone = 'graveyard',
 }: GraveyardPileProps) {
   const [expanded, setExpanded] = useState(false);
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
@@ -41,7 +43,7 @@ export default function GraveyardPile({
   const topCard = cards[cards.length - 1] ?? null;
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center gap-1" data-drop-zone={dropZone}>
       {/* Pile face */}
       <div
         className={`relative w-16 h-[90px] rounded-md border-2 ${borderColor} cursor-pointer overflow-hidden shadow-md`}

@@ -12,6 +12,7 @@ export default function ExilePile({ cards }: ExilePileProps) {
       cards={cards}
       label="Exile"
       borderColor="border-magenta/40"
+      dropZone="exile"
     />
   );
 }

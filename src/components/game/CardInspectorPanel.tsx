@@ -147,14 +147,14 @@ export function CardInspectorPanel() {
           {/* Type line */}
           <div>
             <p className="text-cream-muted/50 text-[9px] uppercase tracking-wider mb-0.5">Type</p>
-            <p className="text-cream text-xs leading-snug">{oracle.typeLine}</p>
+            <p className="text-white text-xs leading-snug">{oracle.typeLine}</p>
           </div>
 
           {/* Oracle text */}
           {oracle.oracleText && (
             <div>
               <p className="text-cream-muted/50 text-[9px] uppercase tracking-wider mb-0.5">Text</p>
-              <p className="text-cream-muted text-[11px] leading-relaxed whitespace-pre-line border-t border-white/5 pt-2">
+              <p className="text-white text-[11px] leading-relaxed whitespace-pre-line border-t border-white/5 pt-2">
                 {oracle.oracleText}
               </p>
             </div>

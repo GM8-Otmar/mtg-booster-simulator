@@ -442,7 +442,7 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
     }
 
     case 'card:zone':
-      return applyDelta(room, { type: 'zone_changed', instanceId: payload.instanceId, toZone: payload.toZone }, myPlayerId);
+      return applyDelta(room, { type: 'zone_changed', instanceId: payload.instanceId, toZone: payload.toZone, toIndex: payload.toIndex }, myPlayerId);
 
     case 'card:facedown':
       return applyDelta(room, { type: 'card_facedown', instanceId: payload.instanceId, faceDown: payload.faceDown }, myPlayerId);

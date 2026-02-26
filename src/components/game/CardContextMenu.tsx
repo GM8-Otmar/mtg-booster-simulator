@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { BattlefieldCard, GameZone } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
 
@@ -51,9 +51,10 @@ export default function CardContextMenu({ card, x, y, onClose }: CardContextMenu
 
   const do_ = (fn: () => void) => { fn(); onClose(); };
 
-  const zones: { label: string; zone: GameZone }[] = [
+  const zones: { label: string; zone: GameZone; toIndex?: number }[] = [
     { label: 'Hand', zone: 'hand' },
-    { label: 'Library (top)', zone: 'library' },
+    { label: 'Library (top)', zone: 'library', toIndex: 0 },
+    { label: 'Library (bottom)', zone: 'library' },
     { label: 'Graveyard', zone: 'graveyard' },
     { label: 'Exile', zone: 'exile' },
     { label: 'Command Zone', zone: 'command_zone' },
@@ -82,10 +83,10 @@ export default function CardContextMenu({ card, x, y, onClose }: CardContextMenu
   sections.push({
     label: 'Move to…',
     items: zones
-      .filter(z => z.zone !== card.zone)
+      .filter(z => !(z.zone === card.zone && z.toIndex === undefined))
       .map(z => ({
         label: z.label,
-        action: () => do_(() => changeZone(card.instanceId, z.zone)),
+        action: () => do_(() => changeZone(card.instanceId, z.zone, z.toIndex)),
       })),
   });
 
@@ -135,18 +136,27 @@ export default function CardContextMenu({ card, x, y, onClose }: CardContextMenu
     });
   }
 
-  // Viewport-clamp: keep menu on screen
-  const vpW = window.innerWidth;
-  const vpH = window.innerHeight;
-  const menuW = 220;
-  const left = Math.min(x, vpW - menuW - 8);
-  const maxTop = vpH - 16;
+  // Viewport-clamp: measure actual menu height after mount, then clamp all edges
+  const [adjustedStyle, setAdjustedStyle] = useState<React.CSSProperties>({
+    left: x, top: y, visibility: 'hidden',
+  });
+
+  useLayoutEffect(() => {
+    if (!menuRef.current) return;
+    const menuH = menuRef.current.offsetHeight;
+    const menuW = 220;
+    const vpW = window.innerWidth;
+    const vpH = window.innerHeight;
+    const clampedLeft = Math.max(8, Math.min(x, vpW - menuW - 8));
+    const clampedTop = Math.max(8, Math.min(y, vpH - menuH - 8));
+    setAdjustedStyle({ left: clampedLeft, top: clampedTop, visibility: 'visible' });
+  }, [x, y]);
 
   return (
     <div
       ref={menuRef}
       className="fixed z-[9999] bg-navy-light border border-cyan-dim rounded-xl shadow-2xl text-sm overflow-hidden"
-      style={{ left, top: Math.min(y, maxTop), width: menuW }}
+      style={{ ...adjustedStyle, width: 220 }}
     >
       {/* Card name header */}
       <div className="px-3 py-2 border-b border-cyan-dim bg-navy">
