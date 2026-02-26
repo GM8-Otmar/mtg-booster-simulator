@@ -7,12 +7,14 @@ import { useCardInspector } from './CardInspectorPanel';
 interface BattlefieldCardProps {
   card: BFCard;
   containerRef: React.RefObject<HTMLDivElement | null>;
+  isSelected?: boolean;
+  onClearSelection?: () => void;
 }
 
 const CARD_W_PX = 80;
 const CARD_H_PX = 112;
 
-export default function BattlefieldCard({ card, containerRef }: BattlefieldCardProps) {
+export default function BattlefieldCard({ card, containerRef, isSelected, onClearSelection }: BattlefieldCardProps) {
   const { moveCard, tapCard, changeZone, playerId } = useGameTable();
   const { inspect } = useCardInspector();
 
@@ -51,6 +53,8 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button === 2 || !isOwner) return;
     e.stopPropagation();
+    // Clicking a card clears any active marquee selection
+    onClearSelection?.();
     draggingRef.current = false;
     movedRef.current = false;
     draggingVisuallyRef.current = false;
@@ -58,7 +62,7 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
     lastEmitPctRef.current = { x: card.x, y: card.y };
     dragOriginRef.current = { x: card.x, y: card.y };
     setIsPressed(true);
-  }, [card.x, card.y, isOwner]);
+  }, [card.x, card.y, isOwner, onClearSelection]);
 
   // ── Window-level listeners — active for the full duration of a press ─────
   // This is the key fix: the card never "loses" the pointer even at high speed.
@@ -267,6 +271,14 @@ export default function BattlefieldCard({ card, containerRef }: BattlefieldCardP
 
         {card.tapped && (
           <div className="absolute inset-0 rounded-lg ring-2 ring-yellow-400/50 pointer-events-none" />
+        )}
+
+        {/* Selection highlight */}
+        {isSelected && (
+          <div
+            className="absolute inset-0 rounded-lg pointer-events-none"
+            style={{ boxShadow: '0 0 0 2px rgba(0, 220, 255, 0.9), 0 0 10px rgba(0, 220, 255, 0.4)' }}
+          />
         )}
       </div>
 
