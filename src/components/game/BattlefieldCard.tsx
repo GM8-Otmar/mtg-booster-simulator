@@ -145,7 +145,8 @@ export default function BattlefieldCard({
         const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
 
         if (zoneEl) {
-          changeZone(card.instanceId, zoneEl.dataset.dropZone as GameZone);
+          const dropZone = zoneEl.dataset.dropZone as GameZone;
+          changeZone(card.instanceId, dropZone, dropZone === 'library' ? 0 : undefined);
           setVisualPos({ x: dragOriginRef.current.x, y: dragOriginRef.current.y });
         } else {
           const container = containerRef.current;

@@ -17,7 +17,7 @@ export default function LibraryStack({ count, playerId }: LibraryStackProps) {
 
   return (
     <>
-      <div className="flex flex-col items-center gap-2">
+      <div className="flex flex-col items-center gap-2" data-drop-zone="library">
         {/* Stack visual */}
         <div className="relative" style={{ width: 64, height: 90 }}>
           {Array.from({ length: cardLayers }).map((_, i) => (

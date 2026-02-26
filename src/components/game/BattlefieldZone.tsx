@@ -204,9 +204,10 @@ export default function BattlefieldZone({
       const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
 
       if (zoneEl) {
-        // Send all selected to the drop zone
+        // Send all selected to the drop zone; library always goes on top
+        const dropZone = zoneEl.dataset.dropZone as GameZone;
         for (const id of drag.startPositions.keys()) {
-          changeZone(id, zoneEl.dataset.dropZone as GameZone);
+          changeZone(id, dropZone, dropZone === 'library' ? 0 : undefined);
         }
       } else {
         // Persist final positions for all selected cards

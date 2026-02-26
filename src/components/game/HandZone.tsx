@@ -123,6 +123,8 @@ function HandCard({
           zIndex: isHovered && !isDragging ? 99 : i,
           opacity: isDragging ? 0.3 : 1,
           transition: isDragging ? 'none' : 'transform 0.15s ease, opacity 0.1s',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -130,6 +132,7 @@ function HandCard({
         onMouseEnter={() => { if (!isDragging) setIsHovered(true); }}
         onMouseLeave={() => setIsHovered(false)}
         onContextMenu={onContextMenu}
+        onDragStart={e => e.preventDefault()}
       >
         <div className={`w-full h-full rounded-lg overflow-hidden border-2 shadow-lg ${isSelected ? 'border-cyan' : 'border-cyan/50'}`}>
           {card.imageUri ? (
@@ -252,14 +255,14 @@ export default function HandZone({ cards }: HandZoneProps) {
 
   if (total === 0) {
     return (
-      <div className="flex items-center justify-center h-full" data-drop-zone="hand">
+      <div className="flex items-center justify-center h-full" data-drop-zone="hand" style={{ userSelect: 'none' }}>
         <p className="text-cream-muted/30 text-xs">Empty hand</p>
       </div>
     );
   }
 
   return (
-    <div className="relative flex flex-col items-center justify-end h-full" data-drop-zone="hand">
+    <div className="relative flex flex-col items-center justify-end h-full" data-drop-zone="hand" style={{ userSelect: 'none' }}>
       {/* Selection hint bar */}
       {hasSelection && (
         <div className="absolute top-1 left-1/2 -translate-x-1/2 z-[200] pointer-events-auto"
