@@ -71,11 +71,19 @@ export default function LibraryStack({ count, playerId }: LibraryStackProps) {
             </button>
             <div className="flex gap-1 items-center w-full">
               <button
-                onClick={() => scry(scryCount)}
+                onClick={() => scry(scryCount, 'scry')}
                 disabled={count === 0}
                 className="flex-1 text-xs py-1 bg-navy-light hover:bg-navy border border-cyan-dim rounded-lg text-cream-muted disabled:opacity-40 transition-all"
               >
                 Scry {scryCount}
+              </button>
+              <button
+                onClick={() => scry(scryCount, 'surveil')}
+                disabled={count === 0}
+                className="flex-1 text-xs py-1 bg-navy-light hover:bg-navy border border-magenta/40 rounded-lg text-magenta/70 disabled:opacity-40 transition-all"
+                title="Surveil — can send cards to graveyard"
+              >
+                Surv.
               </button>
               <select
                 value={scryCount}

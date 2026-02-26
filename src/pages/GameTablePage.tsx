@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameTable } from '../contexts/GameTableContext';
 import GameLobby from '../components/game/GameLobby';
 import BattlefieldZone from '../components/game/BattlefieldZone';
@@ -9,6 +9,7 @@ import GameControls from '../components/game/GameControls';
 import GameActionLog from '../components/game/GameActionLog';
 import ScryOverlay from '../components/game/ScryOverlay';
 import DeckImportModal from '../components/game/DeckImportModal';
+import ZoneCountHUD from '../components/game/ZoneCountHUD';
 import type { BattlefieldCard } from '../types/game';
 import { CardInspectorProvider, CardInspectorPanel } from '../components/game/CardInspectorPanel';
 
@@ -16,12 +17,27 @@ export default function GameTablePage() {
   const {
     room, playerId, leaveGame,
     myPlayer, myHandCards, myBattlefieldCards,
-    scryCards, scryInstanceIds,
+    scryCards, scryInstanceIds, scryMode,
+    canUndo, undo,
     concede, connected, gameRoomId, isSandbox,
+    activeSandboxPlayerId, setActiveSandboxPlayer,
   } = useGameTable();
 
   const [atTable, setAtTable] = useState(false);
   const [showImportAfterJoin, setShowImportAfterJoin] = useState(false);
+
+  // ── Ctrl+Z undo listener ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!atTable) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        if (canUndo) undo();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [atTable, canUndo, undo]);
 
   if (!room || !atTable) {
     return (
@@ -35,7 +51,8 @@ export default function GameTablePage() {
   }
 
   const allPlayers = Object.values(room.players);
-  const opponents = allPlayers.filter(p => p.playerId !== playerId);
+  const effectiveMyId = isSandbox ? (activeSandboxPlayerId ?? playerId) : playerId;
+  const opponents = allPlayers.filter(p => p.playerId !== effectiveMyId);
   const myBfCards: BattlefieldCard[] = myBattlefieldCards;
 
   const handleConcede = () => {
@@ -44,13 +61,16 @@ export default function GameTablePage() {
     setAtTable(false);
   };
 
+  // Whether to show sandbox player switcher tabs
+  const showSandboxTabs = isSandbox && allPlayers.length > 1;
+
   return (
     <CardInspectorProvider>
     <div className="flex flex-col h-screen bg-navy text-cream overflow-hidden">
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-2 bg-navy-light border-b border-cyan-dim/50 shrink-0 z-20">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-4 py-2 bg-navy-light border-b border-cyan-dim/50 shrink-0 z-20 gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => { leaveGame(); setAtTable(false); }}
             className="text-cream-muted hover:text-cream text-sm px-2 py-1 rounded border border-cyan-dim hover:border-cyan transition-all"
@@ -68,7 +88,13 @@ export default function GameTablePage() {
             </span>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Zone count HUD — center/right of top bar */}
+        <div className="flex-1 flex justify-center">
+          <ZoneCountHUD />
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
           {isSandbox ? (
             <span className="text-yellow-400/60 text-xs">offline · local only</span>
           ) : (
@@ -98,6 +124,31 @@ export default function GameTablePage() {
 
         {/* ── Center: opponents + my battlefield + my hand ──────────────── */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
+
+          {/* Sandbox multi-player tabs */}
+          {showSandboxTabs && (
+            <div className="shrink-0 flex gap-0 border-b border-cyan-dim/30 bg-navy/80 px-2 pt-1">
+              {allPlayers.map(p => {
+                const isActive = p.playerId === effectiveMyId;
+                const isYou = p.playerId === playerId;
+                return (
+                  <button
+                    key={p.playerId}
+                    onClick={() => setActiveSandboxPlayer(p.playerId)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg mr-0.5 transition-all border-t border-l border-r ${
+                      isActive
+                        ? 'bg-navy border-cyan-dim/50 text-cyan'
+                        : 'bg-navy-light/50 border-cyan-dim/20 text-cream-muted hover:text-cream hover:bg-navy-light'
+                    }`}
+                  >
+                    {p.playerName}
+                    {isYou && <span className="ml-1 text-[9px] opacity-50">(you)</span>}
+                    <span className="ml-1.5 text-[9px] opacity-60">{p.life}♥</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Opponents section */}
           {opponents.length > 0 && (
@@ -140,9 +191,30 @@ export default function GameTablePage() {
         )}
       </div>
 
-      {/* ── Scry overlay ─────────────────────────────────────────────────── */}
+      {/* ── Undo button — pinned bottom-right ──────────────────────────── */}
+      {isSandbox && (
+        <button
+          onClick={undo}
+          disabled={!canUndo}
+          className={`fixed bottom-4 right-4 z-30 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all shadow-lg ${
+            canUndo
+              ? 'bg-navy-light border-cyan-dim/50 text-cream hover:border-cyan hover:text-cyan'
+              : 'bg-navy-light/50 border-cyan-dim/20 text-cream-muted/30 cursor-not-allowed'
+          }`}
+          title="Undo last action (Ctrl+Z)"
+        >
+          <span className="text-sm leading-none">↩</span>
+          Undo
+        </button>
+      )}
+
+      {/* ── Scry / Surveil overlay ─────────────────────────────────────── */}
       {scryCards.length > 0 && (
-        <ScryOverlay cards={scryCards} instanceIds={scryInstanceIds} />
+        <ScryOverlay
+          cards={scryCards}
+          instanceIds={scryInstanceIds}
+          initialMode={scryMode}
+        />
       )}
 
       {/* ── Deck import modal ──────────────────────────────────────────── */}
