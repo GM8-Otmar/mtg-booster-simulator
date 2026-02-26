@@ -16,6 +16,7 @@ const ACTION_COLORS: Record<string, string> = {
   concede: 'text-red-400',
   message: 'text-cream',
   life_change: 'text-green-300',
+  tap_all: 'text-cream-muted',
 };
 
 function formatTime(iso: string): string {
