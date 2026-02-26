@@ -114,11 +114,13 @@ function makeSandboxPlayer(
 }
 
 export interface SandboxOptions {
-  /** Number of virtual players to pre-populate (1 or 2). Default: 1 */
-  playerCount?: 1 | 2;
+  /** Number of virtual players to pre-populate (1–4). Default: 1 */
+  playerCount?: 1 | 2 | 3 | 4;
   /** Your player name. Default: 'You' */
   playerName?: string;
 }
+
+const OPPONENT_NAMES = ['Opponent', 'Player 3', 'Player 4'];
 
 export function createSandboxGame(options: SandboxOptions = {}): {
   room: GameRoom;
@@ -134,9 +136,11 @@ export function createSandboxGame(options: SandboxOptions = {}): {
 
   players[myPlayerId] = makeSandboxPlayer(myPlayerId, playerName, cards, true);
 
-  if (playerCount === 2) {
-    const oppId = 'sandbox-player-opp';
-    players[oppId] = makeSandboxPlayer(oppId, 'Opponent', cards, true);
+  const extraCount = Math.max(0, (playerCount ?? 1) - 1);
+  for (let i = 0; i < extraCount; i++) {
+    const oppId = `sandbox-player-opp-${i + 1}`;
+    const oppName = OPPONENT_NAMES[i] ?? `Player ${i + 2}`;
+    players[oppId] = makeSandboxPlayer(oppId, oppName, cards, true);
   }
 
   const room: GameRoom = {

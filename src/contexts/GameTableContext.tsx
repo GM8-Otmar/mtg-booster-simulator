@@ -32,6 +32,10 @@ export interface GameTableContextType {
   // scry overlay
   scryCards: BattlefieldCard[];
   scryInstanceIds: string[];
+  scryMode: 'scry' | 'surveil';
+  // undo
+  canUndo: boolean;
+  undo: () => void;
   // derived helpers
   myPlayer: GamePlayerState | null;
   myHandCards: BattlefieldCard[];
@@ -49,6 +53,9 @@ export interface GameTableContextType {
   /** Load a pre-built fake room for offline sandbox testing (no server needed) */
   loadSandbox: (room: GameRoom, sandboxPlayerId: string, sandboxPlayerName: string) => void;
   isSandbox: boolean;
+  /** Active player in sandbox multi-player mode */
+  activeSandboxPlayerId: string | null;
+  setActiveSandboxPlayer: (id: string) => void;
 
   // game actions
   moveCard: (instanceId: string, x: number, y: number, persist: boolean) => void;
@@ -69,8 +76,8 @@ export interface GameTableContextType {
   // library actions
   drawCards: (count: number) => void;
   shuffleLibrary: () => void;
-  scry: (count: number) => void;
-  resolveScry: (keep: string[], bottom: string[]) => void;
+  scry: (count: number, mode?: 'scry' | 'surveil') => void;
+  resolveScry: (keep: string[], bottom: string[], graveyard?: string[]) => void;
   mulligan: (keepCount: number) => void;
 
   // tokens
@@ -99,18 +106,25 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [scryCards, setScryCards] = useState<BattlefieldCard[]>([]);
   const [scryInstanceIds, setScryInstanceIds] = useState<string[]>([]);
+  const [scryMode, setScryMode] = useState<'scry' | 'surveil'>('scry');
   const [isSandbox, setIsSandbox] = useState(false);
+  const [undoSnapshot, setUndoSnapshot] = useState<GameRoom | null>(null);
+  const [activeSandboxPlayerId, setActiveSandboxPlayerIdState] = useState<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const playerIdRef = useRef<string | null>(null);
   const gameRoomIdRef = useRef<string | null>(null);
   const roomRef = useRef<GameRoom | null>(null);
   const pendingLifeLogRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; startLife: number } | null>(null);
+  const isSandboxRef = useRef(false);
+  const activeSandboxPlayerIdRef = useRef<string | null>(null);
 
-  // keep refs in sync for use inside socket callbacks
+  // keep refs in sync
   useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
   useEffect(() => { gameRoomIdRef.current = gameRoomId; }, [gameRoomId]);
   useEffect(() => { roomRef.current = room; }, [room]);
+  useEffect(() => { isSandboxRef.current = isSandbox; }, [isSandbox]);
+  useEffect(() => { activeSandboxPlayerIdRef.current = activeSandboxPlayerId; }, [activeSandboxPlayerId]);
 
   // ── Socket setup ──────────────────────────────────────────────────────────
 
@@ -176,7 +190,6 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      // server returns { room: GameRoom, playerId: string }
       const data = await post('', { hostName: name, format });
       setPlayerId(data.playerId);
       setPlayerName(name);
@@ -194,8 +207,6 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      // Route: POST /api/games/:code/join — server accepts code or gameId as param
-      // server returns { room: GameRoom, playerId: string }
       const data = await post(`/${code}/join`, { playerName: name });
       setPlayerId(data.playerId);
       setPlayerName(name);
@@ -214,7 +225,6 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       await post(`/${gameRoomId}/import-deck`, { playerId, deck });
-      // server will not broadcast on import; re-join to get fresh state
       socketRef.current?.emit('game:join', { gameRoomId, playerId });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to import deck');
@@ -236,6 +246,8 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     setScryCards([]);
     setScryInstanceIds([]);
     setIsSandbox(false);
+    setUndoSnapshot(null);
+    setActiveSandboxPlayerIdState(null);
   }, [gameRoomId]);
 
   /** Load a fake room locally — no socket, no server, no network. */
@@ -246,49 +258,32 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     setGameRoomId(sandboxRoom.id);
     setIsSandbox(true);
     setError(null);
+    setUndoSnapshot(null);
+    setActiveSandboxPlayerIdState(sandboxPlayerId);
   }, []);
 
-  // ── Emit helpers (all fire-and-forget — server is authoritative) ──────────
+  const setActiveSandboxPlayer = useCallback((id: string) => {
+    setActiveSandboxPlayerIdState(id);
+  }, []);
+
+  // ── Emit helpers ──────────────────────────────────────────────────────────
   // In sandbox mode: apply deltas locally instead of emitting to server.
 
   const emit = useCallback((event: string, payload: object) => {
-    if (!gameRoomId || !playerId) return;
-    if (isSandbox) {
-
-      // ── library:scry needs to set scryCards state directly (not just room) ──
-      if (event === 'library:scry') {
-        const count = (payload as { count: number }).count;
-        const player = roomRef.current?.players[playerId];
-        if (player) {
-          const scryCount = Math.min(count, player.libraryCardIds.length);
-          const ids = player.libraryCardIds.slice(0, scryCount);
-          const cards = ids.map(id => roomRef.current!.cards[id]).filter((c): c is BattlefieldCard => c != null);
-          setScryCards(cards);
-          setScryInstanceIds(ids);
-          // Add log entry
-          if (scryCount > 0) {
-            const entry: GameAction = {
-              id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              timestamp: new Date().toISOString(),
-              playerId,
-              playerName: player.playerName,
-              type: 'scry',
-              description: `${player.playerName} scryed ${scryCount}`,
-            };
-            setRoom(prev => prev ? { ...prev, actionLog: appendLog(prev.actionLog, entry) } : prev);
-          }
-        }
-        return;
-      }
+    const pid = playerIdRef.current;
+    const roomId = gameRoomIdRef.current;
+    if (!roomId || !pid) return;
+    if (isSandboxRef.current) {
+      // Use the active sandbox player for actions (supports multi-player switching)
+      const activePid = activeSandboxPlayerIdRef.current ?? pid;
 
       // ── Life changes: apply immediately but debounce the log entry ──────────
       if (event === 'player:life' || event === 'player:life:set') {
         setRoom(prev => {
           if (!prev) return prev;
-          return applyLocalSandboxAction(prev, event, { gameRoomId, playerId, ...payload }, playerId);
+          return applyLocalSandboxAction(prev, event, { gameRoomId: roomId, playerId: activePid, ...payload }, activePid);
         });
-        // Save startLife on first change; reset debounce timer on each change
-        const currentLife = roomRef.current?.players[playerId]?.life ?? 20;
+        const currentLife = roomRef.current?.players[activePid]?.life ?? 20;
         if (!pendingLifeLogRef.current) {
           pendingLifeLogRef.current = { timer: null, startLife: currentLife };
         }
@@ -296,11 +291,11 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
           clearTimeout(pendingLifeLogRef.current.timer);
         }
         pendingLifeLogRef.current.timer = setTimeout(() => {
-          const pid = playerIdRef.current;
-          if (!pid || !pendingLifeLogRef.current) return;
+          const currentPid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+          if (!currentPid || !pendingLifeLogRef.current) return;
           const snapshot = roomRef.current;
           if (!snapshot) { pendingLifeLogRef.current = null; return; }
-          const player = snapshot.players[pid];
+          const player = snapshot.players[currentPid];
           if (!player) { pendingLifeLogRef.current = null; return; }
           const finalLife = player.life;
           const lifeDelta = finalLife - pendingLifeLogRef.current.startLife;
@@ -311,7 +306,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
           const entry: GameAction = {
             id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             timestamp: new Date().toISOString(),
-            playerId: pid,
+            playerId: currentPid,
             playerName: player.playerName,
             type: 'life_change',
             description: desc,
@@ -325,13 +320,30 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       // ── All other sandbox events ─────────────────────────────────────────────
       setRoom(prev => {
         if (!prev) return prev;
-        return applyLocalSandboxAction(prev, event, { gameRoomId, playerId, ...payload }, playerId);
+        return applyLocalSandboxAction(prev, event, { gameRoomId: roomId, playerId: activePid, ...payload }, activePid);
       });
       return;
     }
     if (!socketRef.current) return;
-    socketRef.current.emit(event, { gameRoomId, playerId, ...payload });
-  }, [gameRoomId, playerId, isSandbox]);
+    socketRef.current.emit(event, { gameRoomId: roomId, playerId: pid, ...payload });
+  }, []);
+
+  // ── Undo helpers ──────────────────────────────────────────────────────────
+
+  const saveUndoSnapshot = useCallback(() => {
+    if (isSandboxRef.current && roomRef.current) {
+      setUndoSnapshot(roomRef.current);
+    }
+  }, []);
+
+  const undo = useCallback(() => {
+    if (undoSnapshot) {
+      setRoom(undoSnapshot);
+      setUndoSnapshot(null);
+    }
+  }, [undoSnapshot]);
+
+  const canUndo = undoSnapshot !== null && isSandbox;
 
   // ── Card actions ──────────────────────────────────────────────────────────
 
@@ -340,28 +352,33 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   }, [emit]);
 
   const changeZone = useCallback((instanceId: string, toZone: GameZone, toIndex?: number) => {
+    saveUndoSnapshot();
     emit('card:zone', { instanceId, toZone, toIndex });
-  }, [emit]);
+  }, [emit, saveUndoSnapshot]);
 
   const tapCard = useCallback((instanceId: string, tapped: boolean) => {
+    saveUndoSnapshot();
     emit('card:tap', { instanceId, tapped });
-  }, [emit]);
+  }, [emit, saveUndoSnapshot]);
 
   const tapAll = useCallback((filter: 'all' | 'lands' = 'all') => {
+    saveUndoSnapshot();
     emit('cards:tap-all', { filter, tapped: true });
-  }, [emit]);
+  }, [emit, saveUndoSnapshot]);
 
   const untapAll = useCallback(() => {
+    saveUndoSnapshot();
     emit('cards:tap-all', { filter: 'all', tapped: false });
-  }, [emit]);
+  }, [emit, saveUndoSnapshot]);
 
   const setFaceDown = useCallback((instanceId: string, faceDown: boolean) => {
     emit('card:facedown', { instanceId, faceDown });
   }, [emit]);
 
   const addCounter = useCallback((instanceId: string, counterType: string, delta: number, label?: string) => {
+    saveUndoSnapshot();
     emit('card:counter', { instanceId, counterType, delta, label });
-  }, [emit]);
+  }, [emit, saveUndoSnapshot]);
 
   // ── Player actions ────────────────────────────────────────────────────────
 
@@ -396,14 +413,77 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('library:shuffle', {});
   }, [emit]);
 
-  const scry = useCallback((count: number) => {
+  const scry = useCallback((count: number, mode: 'scry' | 'surveil' = 'scry') => {
+    setScryMode(mode);
+    if (isSandboxRef.current) {
+      const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+      const currentRoom = roomRef.current;
+      if (!activePid || !currentRoom) return;
+      const player = currentRoom.players[activePid];
+      if (!player) return;
+      const scryCount = Math.min(count, player.libraryCardIds.length);
+      const ids = player.libraryCardIds.slice(0, scryCount);
+      const cards = ids.map(id => currentRoom.cards[id]).filter((c): c is BattlefieldCard => c != null);
+      setScryCards(cards);
+      setScryInstanceIds(ids);
+      // Log the scry/surveil action
+      if (scryCount > 0) {
+        const verb = mode === 'surveil' ? 'surveilled' : 'scryed';
+        const entry: GameAction = {
+          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: new Date().toISOString(),
+          playerId: activePid,
+          playerName: player.playerName,
+          type: 'scry',
+          description: `${player.playerName} ${verb} ${scryCount}`,
+        };
+        setRoom(prev => prev ? { ...prev, actionLog: appendLog(prev.actionLog, entry) } : prev);
+      }
+      return;
+    }
     emit('library:scry', { count });
   }, [emit]);
 
-  const resolveScry = useCallback((keep: string[], bottom: string[]) => {
+  const resolveScry = useCallback((keep: string[], bottom: string[], graveyard?: string[]) => {
     setScryCards([]);
     setScryInstanceIds([]);
-    emit('library:scry:resolve', { keep, bottom });
+    if (isSandboxRef.current) {
+      const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+      if (!activePid) return;
+      setRoom(prev => {
+        if (!prev) return prev;
+        const player = prev.players[activePid];
+        if (!player) return prev;
+        const allScried = [...keep, ...bottom, ...(graveyard ?? [])];
+        // Remove these from library, then put keep at front and bottom at back
+        let libIds = player.libraryCardIds.filter(id => !allScried.includes(id));
+        libIds = [...keep, ...libIds, ...bottom];
+        const newGraveIds = graveyard ? [...player.graveyardCardIds, ...graveyard] : player.graveyardCardIds;
+        const newCards = { ...prev.cards };
+        for (const id of graveyard ?? []) {
+          if (newCards[id]) newCards[id] = { ...newCards[id]!, zone: 'graveyard' };
+        }
+        const logEntry: GameAction = {
+          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: new Date().toISOString(),
+          playerId: activePid,
+          playerName: player.playerName,
+          type: 'scry',
+          description: `${player.playerName} resolved scry`,
+        };
+        return {
+          ...prev,
+          cards: newCards,
+          players: {
+            ...prev.players,
+            [activePid]: { ...player, libraryCardIds: libIds, graveyardCardIds: newGraveIds },
+          },
+          actionLog: appendLog(prev.actionLog, logEntry),
+        };
+      });
+      return;
+    }
+    emit('library:scry:resolve', { keep, bottom, graveyard });
   }, [emit]);
 
   const mulligan = useCallback((keepCount: number) => {
@@ -413,8 +493,9 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   // ── Tokens ────────────────────────────────────────────────────────────────
 
   const createToken = useCallback((template: TokenTemplate, x: number, y: number) => {
+    saveUndoSnapshot();
     emit('token:create', { template, x, y });
-  }, [emit]);
+  }, [emit, saveUndoSnapshot]);
 
   // ── Social ────────────────────────────────────────────────────────────────
 
@@ -426,17 +507,19 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('game:message', { text });
   }, [emit]);
 
-  // ── Derived helpers ───────────────────────────────────────────────────────
+  // ── Derived helpers (use activeSandboxPlayerId in sandbox) ────────────────
 
-  const myPlayer = room && playerId ? (room.players[playerId] ?? null) : null;
+  const effectivePlayerId = isSandbox ? (activeSandboxPlayerId ?? playerId) : playerId;
+
+  const myPlayer = room && effectivePlayerId ? (room.players[effectivePlayerId] ?? null) : null;
 
   const myHandCards = room && myPlayer
     ? myPlayer.handCardIds.map(id => room.cards[id]).filter((c): c is BattlefieldCard => c != null)
     : [];
 
-  const myBattlefieldCards = room && myPlayer
+  const myBattlefieldCards = room && effectivePlayerId
     ? Object.values(room.cards).filter(
-        c => c.zone === 'battlefield' && c.controller === playerId,
+        c => c.zone === 'battlefield' && c.controller === effectivePlayerId,
       )
     : [];
 
@@ -460,10 +543,12 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     <GameTableContext.Provider value={{
       room, playerId, playerName, gameRoomId,
       loading, error, connected,
-      scryCards, scryInstanceIds,
+      scryCards, scryInstanceIds, scryMode,
+      canUndo, undo,
       myPlayer, myHandCards, myBattlefieldCards, myLibraryCount,
       myGraveyardCards, myExileCards, myCommandZoneCards,
       createGame, joinGame, importDeck, leaveGame, loadSandbox, isSandbox,
+      activeSandboxPlayerId, setActiveSandboxPlayer,
       moveCard, changeZone, tapCard, tapAll, untapAll, setFaceDown, addCounter,
       adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast,
       drawCards, shuffleLibrary, scry, resolveScry, mulligan,
@@ -481,13 +566,7 @@ export function useGameTable() {
   return ctx;
 }
 
-// ─── Delta patcher ──────────────────────────────────────────────────────────
-// Imported from src/utils/gameDelta.ts (testable without React).
-// applyDelta is re-exported from that module; used above in the socket handler.
-
 // ─── Sandbox local action handler ───────────────────────────────────────────
-// Converts socket event payloads into delta objects and applies them locally,
-// so sandbox mode works without a server.
 
 const ZONE_LABELS: Record<string, string> = {
   battlefield: 'Battlefield',
