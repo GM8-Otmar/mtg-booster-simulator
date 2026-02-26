@@ -81,6 +81,7 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       return {
         ...room,
         players: { ...room.players, [delta.playerId]: { ...player, life: delta.life } },
+        actionLog: appendLog(room.actionLog, delta.log),
       };
     }
 

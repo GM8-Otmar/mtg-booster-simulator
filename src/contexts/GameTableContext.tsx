@@ -13,9 +13,10 @@ import type {
   BattlefieldCard,
   GameZone,
   TokenTemplate,
+  GameAction,
 } from '../types/game';
 import type { ParsedDeck } from '../utils/deckImport';
-import { applyDelta } from '../utils/gameDelta';
+import { applyDelta, appendLog } from '../utils/gameDelta';
 
 // ─── Types exposed to components ─────────────────────────────────────────────
 
@@ -103,10 +104,13 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
   const playerIdRef = useRef<string | null>(null);
   const gameRoomIdRef = useRef<string | null>(null);
+  const roomRef = useRef<GameRoom | null>(null);
+  const pendingLifeLogRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; startLife: number } | null>(null);
 
   // keep refs in sync for use inside socket callbacks
   useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
   useEffect(() => { gameRoomIdRef.current = gameRoomId; }, [gameRoomId]);
+  useEffect(() => { roomRef.current = room; }, [room]);
 
   // ── Socket setup ──────────────────────────────────────────────────────────
 
@@ -250,7 +254,75 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   const emit = useCallback((event: string, payload: object) => {
     if (!gameRoomId || !playerId) return;
     if (isSandbox) {
-      // In sandbox mode, apply the action to local state directly
+
+      // ── library:scry needs to set scryCards state directly (not just room) ──
+      if (event === 'library:scry') {
+        const count = (payload as { count: number }).count;
+        const player = roomRef.current?.players[playerId];
+        if (player) {
+          const scryCount = Math.min(count, player.libraryCardIds.length);
+          const ids = player.libraryCardIds.slice(0, scryCount);
+          const cards = ids.map(id => roomRef.current!.cards[id]).filter((c): c is BattlefieldCard => c != null);
+          setScryCards(cards);
+          setScryInstanceIds(ids);
+          // Add log entry
+          if (scryCount > 0) {
+            const entry: GameAction = {
+              id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              timestamp: new Date().toISOString(),
+              playerId,
+              playerName: player.playerName,
+              type: 'scry',
+              description: `${player.playerName} scryed ${scryCount}`,
+            };
+            setRoom(prev => prev ? { ...prev, actionLog: appendLog(prev.actionLog, entry) } : prev);
+          }
+        }
+        return;
+      }
+
+      // ── Life changes: apply immediately but debounce the log entry ──────────
+      if (event === 'player:life' || event === 'player:life:set') {
+        setRoom(prev => {
+          if (!prev) return prev;
+          return applyLocalSandboxAction(prev, event, { gameRoomId, playerId, ...payload }, playerId);
+        });
+        // Save startLife on first change; reset debounce timer on each change
+        const currentLife = roomRef.current?.players[playerId]?.life ?? 20;
+        if (!pendingLifeLogRef.current) {
+          pendingLifeLogRef.current = { timer: null, startLife: currentLife };
+        }
+        if (pendingLifeLogRef.current.timer) {
+          clearTimeout(pendingLifeLogRef.current.timer);
+        }
+        pendingLifeLogRef.current.timer = setTimeout(() => {
+          const pid = playerIdRef.current;
+          if (!pid || !pendingLifeLogRef.current) return;
+          const snapshot = roomRef.current;
+          if (!snapshot) { pendingLifeLogRef.current = null; return; }
+          const player = snapshot.players[pid];
+          if (!player) { pendingLifeLogRef.current = null; return; }
+          const finalLife = player.life;
+          const lifeDelta = finalLife - pendingLifeLogRef.current.startLife;
+          const sign = lifeDelta >= 0 ? '+' : '';
+          const desc = lifeDelta === 0
+            ? `${player.playerName}: ${finalLife} life`
+            : `${player.playerName}: ${finalLife} life (${sign}${lifeDelta})`;
+          const entry: GameAction = {
+            id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: new Date().toISOString(),
+            playerId: pid,
+            playerName: player.playerName,
+            type: 'life_change',
+            description: desc,
+          };
+          setRoom(prev => prev ? { ...prev, actionLog: appendLog(prev.actionLog, entry) } : prev);
+          pendingLifeLogRef.current = null;
+        }, 1500);
+        return;
+      }
+
+      // ── All other sandbox events ─────────────────────────────────────────────
       setRoom(prev => {
         if (!prev) return prev;
         return applyLocalSandboxAction(prev, event, { gameRoomId, playerId, ...payload }, playerId);
@@ -417,6 +489,24 @@ export function useGameTable() {
 // Converts socket event payloads into delta objects and applies them locally,
 // so sandbox mode works without a server.
 
+const ZONE_LABELS: Record<string, string> = {
+  battlefield: 'Battlefield',
+  hand: 'Hand',
+  library: 'Library',
+  graveyard: 'Graveyard',
+  exile: 'Exile',
+  command_zone: 'Command Zone',
+  sideboard: 'Sideboard',
+};
+
+function makeLogId(): string {
+  return `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function sandboxLog(playerId: string, playerName: string, type: string, description: string): GameAction {
+  return { id: makeLogId(), timestamp: new Date().toISOString(), playerId, playerName, type, description };
+}
+
 function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, myPlayerId: string): GameRoom {
   const shuffleArr = <T,>(arr: T[]): T[] => {
     const a = [...arr];
@@ -426,6 +516,10 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
     }
     return a;
   };
+
+  const me = room.players[myPlayerId];
+  const myName = me?.playerName ?? 'Player';
+  const log = (type: string, desc: string) => sandboxLog(myPlayerId, myName, type, desc);
 
   switch (event) {
     case 'card:move':
@@ -438,11 +532,33 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       const changed = Object.values(room.cards)
         .filter(c => c.controller === myPlayerId && c.zone === 'battlefield')
         .map(c => c.instanceId);
-      return applyDelta(room, { type: 'cards_tap_all', changed, tapped: payload.tapped }, myPlayerId);
+      const result = applyDelta(room, { type: 'cards_tap_all', changed, tapped: payload.tapped }, myPlayerId);
+      let tapDesc: string;
+      if (!payload.tapped) tapDesc = `${myName} untapped all permanents`;
+      else if (payload.filter === 'lands') tapDesc = `${myName} tapped all lands`;
+      else tapDesc = `${myName} tapped all permanents`;
+      return { ...result, actionLog: appendLog(result.actionLog, log('tap_all', tapDesc)) };
     }
 
-    case 'card:zone':
-      return applyDelta(room, { type: 'zone_changed', instanceId: payload.instanceId, toZone: payload.toZone, toIndex: payload.toIndex }, myPlayerId);
+    case 'card:zone': {
+      const card = room.cards[payload.instanceId];
+      const fromZone = card?.zone ?? 'battlefield';
+      const cardName = card?.name ?? 'a card';
+      let zoneDesc: string;
+      if (fromZone === 'hand' && payload.toZone === 'battlefield') {
+        zoneDesc = `${myName} played ${cardName}`;
+      } else {
+        const toLabel = ZONE_LABELS[payload.toZone as string] ?? payload.toZone;
+        zoneDesc = `${myName}: ${cardName} → ${toLabel}`;
+      }
+      return applyDelta(room, {
+        type: 'zone_changed',
+        instanceId: payload.instanceId,
+        toZone: payload.toZone,
+        toIndex: payload.toIndex,
+        log: log('zone_change', zoneDesc),
+      }, myPlayerId);
+    }
 
     case 'card:facedown':
       return applyDelta(room, { type: 'card_facedown', instanceId: payload.instanceId, faceDown: payload.faceDown }, myPlayerId);
@@ -461,6 +577,7 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       return applyDelta(room, { type: 'counters_changed', instanceId: payload.instanceId, counters }, myPlayerId);
     }
 
+    // Note: life events are intercepted in emit() for debounced logging — these just apply the state change.
     case 'player:life': {
       const player = room.players[myPlayerId];
       if (!player) return room;
@@ -479,7 +596,14 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
     case 'commander:cast': {
       const player = room.players[myPlayerId];
       if (!player) return room;
-      return applyDelta(room, { type: 'commander_cast', playerId: myPlayerId, commanderTax: player.commanderTax + 1 }, myPlayerId);
+      const commanderCard = Object.values(room.cards).find(c => c.controller === myPlayerId && c.isCommander);
+      const commanderName = commanderCard?.name ?? 'commander';
+      return applyDelta(room, {
+        type: 'commander_cast',
+        playerId: myPlayerId,
+        commanderTax: player.commanderTax + 1,
+        log: log('commander_cast', `${myName} cast ${commanderName}`),
+      }, myPlayerId);
     }
 
     case 'library:draw': {
@@ -487,14 +611,35 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       if (!player) return room;
       const drawCount = Math.min(payload.count, player.libraryCardIds.length);
       const drawn = player.libraryCardIds.slice(0, drawCount).map(id => room.cards[id]!).filter(Boolean);
-      return applyDelta(room, { type: 'cards_drawn', drawn }, myPlayerId);
+      const drawDesc = drawn.length === 1
+        ? `${myName} drew ${drawn[0]!.name}`
+        : `${myName} drew ${drawn.length} card${drawn.length !== 1 ? 's' : ''}`;
+      return applyDelta(room, {
+        type: 'cards_drawn',
+        drawn,
+        log: drawCount > 0 ? log('draw', drawDesc) : undefined,
+      }, myPlayerId);
     }
 
     case 'library:shuffle': {
       const player = room.players[myPlayerId];
       if (!player) return room;
       const shuffled = shuffleArr(player.libraryCardIds);
-      return { ...room, players: { ...room.players, [myPlayerId]: { ...player, libraryCardIds: shuffled } } };
+      const shuffleResult = { ...room, players: { ...room.players, [myPlayerId]: { ...player, libraryCardIds: shuffled } } };
+      return { ...shuffleResult, actionLog: appendLog(shuffleResult.actionLog, log('shuffle', `${myName} shuffled their library`)) };
+    }
+
+    case 'library:scry:resolve': {
+      const player = room.players[myPlayerId];
+      if (!player) return room;
+      const scryCount = (payload.keep as string[]).length + (payload.bottom as string[]).length;
+      const remaining = player.libraryCardIds.slice(scryCount);
+      const newLibrary = [...(payload.keep as string[]), ...remaining, ...(payload.bottom as string[])];
+      return {
+        ...room,
+        players: { ...room.players, [myPlayerId]: { ...player, libraryCardIds: newLibrary } },
+        actionLog: appendLog(room.actionLog, log('scry', `${myName} resolved scry`)),
+      };
     }
 
     case 'library:mulligan': {
@@ -507,15 +652,22 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       for (const id of newHand) { if (newCards[id]) newCards[id] = { ...newCards[id]!, zone: 'hand' }; }
       for (const id of newLib) { if (newCards[id]) newCards[id] = { ...newCards[id]!, zone: 'library' }; }
       const drawn = newHand.map(id => newCards[id]!).filter(Boolean);
-      return applyDelta({ ...room, cards: newCards, players: { ...room.players, [myPlayerId]: { ...player, handCardIds: [], libraryCardIds: allIds } } }, { type: 'mulligan', drawn }, myPlayerId);
+      return applyDelta(
+        { ...room, cards: newCards, players: { ...room.players, [myPlayerId]: { ...player, handCardIds: [], libraryCardIds: allIds } } },
+        { type: 'mulligan', drawn, log: log('mulligan', `${myName} took a mulligan (${newHand.length} cards)`) },
+        myPlayerId,
+      );
     }
 
     case 'token:create': {
       const token = { ...payload.template, instanceId: `sandbox-token-${Date.now()}`, scryfallId: 'token', imageUri: payload.template.imageUri ?? null, zone: 'battlefield', controller: myPlayerId, x: payload.x, y: payload.y, tapped: false, faceDown: false, flipped: false, counters: [], isCommander: false } as const;
-      return { ...room, cards: { ...room.cards, [token.instanceId]: token } };
+      const tokenResult = { ...room, cards: { ...room.cards, [token.instanceId]: token } };
+      return { ...tokenResult, actionLog: appendLog(tokenResult.actionLog, log('token', `${myName} created ${payload.template.name}`)) };
     }
 
     case 'game:concede':
+      return { ...room, actionLog: appendLog(room.actionLog, log('concede', `${myName} conceded`)) };
+
     case 'game:message':
     default:
       return room;
