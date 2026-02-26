@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { BattlefieldCard, GameZone } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
+import { getCachedOracle } from '../../utils/scryfallOracle';
 
 interface CardContextMenuProps {
   card: BattlefieldCard;
@@ -26,7 +27,7 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
   const {
     changeZone, tapCard, setFaceDown,
     addCounter, notifyCommanderCast,
-    playerId,
+    createToken, playerId,
   } = useGameTable();
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -119,6 +120,31 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
           },
         ],
       });
+
+      sections.push({
+        label: 'Clone',
+        items: [
+          {
+            label: 'Copy all to battlefield',
+            action: () => doAll(c => {
+              if (c.zone !== 'battlefield') return;
+              const oracle = getCachedOracle(c.name);
+              createToken(
+                {
+                  name: c.name,
+                  typeLine: oracle?.typeLine ?? '',
+                  power: oracle?.power ?? '0',
+                  toughness: oracle?.toughness ?? '0',
+                  colors: [],
+                  imageUri: c.imageUri ?? undefined,
+                },
+                Math.min(96, c.x + 6),
+                Math.min(96, c.y + 5),
+              );
+            }),
+          },
+        ],
+      });
     }
   } else {
     // ── Single-card mode (existing behaviour) ────────────────────────────────
@@ -174,6 +200,31 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
           {
             label: 'Charge counter (+)',
             action: () => do_(() => addCounter(card.instanceId, 'charge', 1)),
+          },
+        ],
+      });
+    }
+
+    // Clone (battlefield only)
+    if (card.zone === 'battlefield') {
+      const oracle = getCachedOracle(card.name);
+      sections.push({
+        label: 'Clone',
+        items: [
+          {
+            label: 'Copy to battlefield',
+            action: () => do_(() => createToken(
+              {
+                name: card.name,
+                typeLine: oracle?.typeLine ?? '',
+                power: oracle?.power ?? '0',
+                toughness: oracle?.toughness ?? '0',
+                colors: [],
+                imageUri: card.imageUri ?? undefined,
+              },
+              Math.min(96, card.x + 6),
+              Math.min(96, card.y + 5),
+            )),
           },
         ],
       });

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGameTable } from '../../contexts/GameTableContext';
 import DeckImportModal from './DeckImportModal';
+import TokenCreatorModal from './TokenCreatorModal';
 import type { TokenTemplate } from '../../types/game';
 
 interface GameControlsProps {
@@ -28,6 +29,7 @@ export default function GameControls({ onConcede }: GameControlsProps) {
 
   const [showImport, setShowImport] = useState(false);
   const [showTokens, setShowTokens] = useState(false);
+  const [showTokenCreator, setShowTokenCreator] = useState(false);
   const [showConfirmConcede, setShowConfirmConcede] = useState(false);
   const [chatText, setChatText] = useState('');
 
@@ -37,9 +39,12 @@ export default function GameControls({ onConcede }: GameControlsProps) {
     setChatText('');
   };
 
-  const handleCreateToken = (template: TokenTemplate) => {
-    // Spawn near center
-    createToken(template, 50 + Math.random() * 10 - 5, 50 + Math.random() * 10 - 5);
+  const handleCreateToken = (template: TokenTemplate, count = 1) => {
+    for (let i = 0; i < count; i++) {
+      const ox = (Math.random() - 0.5) * 10;
+      const oy = (Math.random() - 0.5) * 8;
+      createToken(template, Math.max(4, Math.min(96, 50 + ox)), Math.max(4, Math.min(96, 50 + oy)));
+    }
     setShowTokens(false);
   };
 
@@ -107,6 +112,15 @@ export default function GameControls({ onConcede }: GameControlsProps) {
               {t.name}
             </button>
           ))}
+          {/* Divider + custom entry */}
+          <div className="border-t border-cyan-dim/20 pt-1 mt-1">
+            <button
+              onClick={() => { setShowTokens(false); setShowTokenCreator(true); }}
+              className="w-full text-left text-xs px-2 py-1 rounded hover:bg-magenta/20 text-magenta transition-all font-semibold"
+            >
+              ✦ Custom token…
+            </button>
+          </div>
         </div>
       )}
 
@@ -163,6 +177,7 @@ export default function GameControls({ onConcede }: GameControlsProps) {
       )}
 
       {showImport && <DeckImportModal onClose={() => setShowImport(false)} />}
+      {showTokenCreator && <TokenCreatorModal onClose={() => setShowTokenCreator(false)} />}
     </div>
   );
 }
