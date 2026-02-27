@@ -24,3 +24,17 @@ body {
   margin: 0;
   min-height: 100vh;
 }
+
+/* Card shake animation (triggered by H key) */
+@keyframes card-shake {
+  0%, 100% { translate: 0 0; }
+  25% { translate: -4px 0; }
+  75% { translate: 4px 0; }
+}
+
+/* Targeting arrow fade-out: visible ~1s then fades over ~4s */
+@keyframes arrow-fade {
+  0%   { opacity: 1; }
+  20%  { opacity: 1; }
+  100% { opacity: 0; }
+}

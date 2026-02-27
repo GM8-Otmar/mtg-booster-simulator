@@ -24,6 +24,8 @@ export interface GameTableContextType {
   // state
   room: GameRoom | null;
   playerId: string | null;
+  /** In sandbox multi-player, this is the active sandbox player; otherwise same as playerId */
+  effectivePlayerId: string | null;
   playerName: string | null;
   gameRoomId: string | null;
   loading: boolean;
@@ -60,11 +62,19 @@ export interface GameTableContextType {
   // game actions
   moveCard: (instanceId: string, x: number, y: number, persist: boolean) => void;
   changeZone: (instanceId: string, toZone: GameZone, toIndex?: number) => void;
+  /** Move multiple cards to a zone at once (avoids batching issues) */
+  bulkChangeZone: (instanceIds: string[], toZone: GameZone, toIndex?: number) => void;
   tapCard: (instanceId: string, tapped: boolean) => void;
   tapAll: (filter?: 'all' | 'lands') => void;
   untapAll: () => void;
   setFaceDown: (instanceId: string, faceDown: boolean) => void;
   addCounter: (instanceId: string, counterType: string, delta: number, label?: string) => void;
+  /** Apply a counter change to multiple cards at once (avoids batching issues) */
+  bulkAddCounter: (instanceIds: string[], counterType: string, delta: number, label?: string) => void;
+  resetCounters: (instanceId: string) => void;
+  revealCards: (instanceIds: string[]) => void;
+  shakeCards: (instanceIds: string[]) => void;
+  shakingCardIds: Set<string>;
 
   // player actions
   adjustLife: (delta: number) => void;
@@ -83,9 +93,26 @@ export interface GameTableContextType {
   // tokens
   createToken: (template: TokenTemplate, x: number, y: number) => void;
 
+  // turn order
+  passTurn: () => void;
+  activePlayerId: string | null;
+  isMyTurn: boolean;
+
+  // targeting arrows (client-only state)
+  targetingArrows: Array<{ id: string; fromId: string; toId: string; createdAt: number }>;
+  isTargetingMode: boolean;
+  startTargeting: (sourceInstanceId: string) => void;
+  cancelTargeting: () => void;
+  completeTargeting: (targetId: string) => void;
+  dismissArrow: (arrowId: string) => void;
+  clearAllArrows: () => void;
+
   // social
   concede: () => void;
   sendMessage: (text: string) => void;
+
+  // dice
+  rollDice: (faces: number, result: number) => void;
 }
 
 // ─── Context init ──────────────────────────────────────────────────────────
@@ -111,11 +138,19 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   const [undoSnapshot, setUndoSnapshot] = useState<GameRoom | null>(null);
   const [activeSandboxPlayerId, setActiveSandboxPlayerIdState] = useState<string | null>(null);
 
+  // targeting arrows (client-only)
+  const [targetingArrows, setTargetingArrows] = useState<Array<{ id: string; fromId: string; toId: string; createdAt: number }>>([]);
+  const [targetingSource, setTargetingSource] = useState<string | null>(null);
+
+  // shaking cards (visual-only, temporary)
+  const [shakingCardIds, setShakingCardIds] = useState<Set<string>>(new Set());
+
   const socketRef = useRef<Socket | null>(null);
   const playerIdRef = useRef<string | null>(null);
   const gameRoomIdRef = useRef<string | null>(null);
   const roomRef = useRef<GameRoom | null>(null);
   const pendingLifeLogRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; startLife: number } | null>(null);
+  const pendingCounterLogRef = useRef<Record<string, { timer: ReturnType<typeof setTimeout> | null; startTotal: number; cardName: string }>>({});
   const isSandboxRef = useRef(false);
   const activeSandboxPlayerIdRef = useRef<string | null>(null);
 
@@ -147,6 +182,19 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
         if (!prev) return prev;
         return applyDelta(prev, delta, playerIdRef.current);
       });
+    });
+
+    // Shake effect — visual only, auto-clears after 600ms
+    sock.on('game:shake', ({ instanceIds }: { instanceIds: string[] }) => {
+      const ids = new Set<string>(instanceIds);
+      setShakingCardIds(prev => new Set([...prev, ...ids]));
+      setTimeout(() => {
+        setShakingCardIds(prev => {
+          const next = new Set(prev);
+          for (const id of ids) next.delete(id);
+          return next;
+        });
+      }, 600);
     });
 
     // Scry reveal — only arrives at the scryer's socket
@@ -317,6 +365,67 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // ── Shake: visual-only, no room state change ──────────────────────────────
+      if (event === 'card:shake') {
+        const ids = new Set<string>((payload as any).instanceIds as string[]);
+        setShakingCardIds(prev => new Set([...prev, ...ids]));
+        setTimeout(() => {
+          setShakingCardIds(prev => {
+            const next = new Set(prev);
+            for (const id of ids) next.delete(id);
+            return next;
+          });
+        }, 600);
+        return;
+      }
+
+      // ── Counter changes: apply immediately but debounce the log entry ──────
+      if (event === 'card:counter') {
+        const instanceId = (payload as any).instanceId as string;
+        // Apply state change immediately (skip log — we'll add it after debounce)
+        setRoom(prev => {
+          if (!prev) return prev;
+          return applyLocalSandboxAction(prev, event, { gameRoomId: roomId, playerId: activePid, ...payload, _skipLog: true }, activePid);
+        });
+        const pending = pendingCounterLogRef.current;
+        if (pending[instanceId]?.timer) {
+          clearTimeout(pending[instanceId].timer!);
+        }
+        if (!pending[instanceId]) {
+          const card = roomRef.current?.cards[instanceId];
+          pending[instanceId] = {
+            timer: null,
+            startTotal: card?.counters.reduce((s, c) => s + c.value, 0) ?? 0,
+            cardName: card?.name ?? 'a card',
+          };
+        }
+        pending[instanceId].timer = setTimeout(() => {
+          const currentRoom = roomRef.current;
+          const currentPid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+          if (!currentRoom || !currentPid) { delete pending[instanceId]; return; }
+          const card = currentRoom.cards[instanceId];
+          const player = currentRoom.players[currentPid];
+          if (!card || !player) { delete pending[instanceId]; return; }
+          const finalTotal = card.counters.reduce((s, c) => s + c.value, 0);
+          const startTotal = pending[instanceId]!.startTotal;
+          const totalDelta = finalTotal - startTotal;
+          if (totalDelta === 0) { delete pending[instanceId]; return; }
+          const sign = totalDelta >= 0 ? '+' : '';
+          const desc = `${player.playerName}: ${pending[instanceId]!.cardName} ${sign}${totalDelta} counter (→ ${finalTotal})`;
+          const entry: GameAction = {
+            id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: new Date().toISOString(),
+            playerId: currentPid,
+            playerName: player.playerName,
+            type: 'counter_change',
+            description: desc,
+          };
+          setRoom(prev => prev ? { ...prev, actionLog: appendLog(prev.actionLog, entry) } : prev);
+          delete pending[instanceId];
+        }, 1500);
+        return;
+      }
+
       // ── All other sandbox events ─────────────────────────────────────────────
       setRoom(prev => {
         if (!prev) return prev;
@@ -356,6 +465,29 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('card:zone', { instanceId, toZone, toIndex });
   }, [emit, saveUndoSnapshot]);
 
+  const bulkChangeZone = useCallback((instanceIds: string[], toZone: GameZone, toIndex?: number) => {
+    if (instanceIds.length === 0) return;
+    saveUndoSnapshot();
+    if (isSandboxRef.current) {
+      const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+      const roomId = gameRoomIdRef.current;
+      if (!activePid || !roomId) return;
+      // Apply all zone changes in a single setRoom call
+      setRoom(prev => {
+        if (!prev) return prev;
+        let current = prev;
+        for (const id of instanceIds) {
+          current = applyLocalSandboxAction(current, 'card:zone', { gameRoomId: roomId, playerId: activePid, instanceId: id, toZone, toIndex }, activePid);
+        }
+        return current;
+      });
+    } else {
+      for (const id of instanceIds) {
+        emit('card:zone', { instanceId: id, toZone, toIndex });
+      }
+    }
+  }, [emit, saveUndoSnapshot]);
+
   const tapCard = useCallback((instanceId: string, tapped: boolean) => {
     saveUndoSnapshot();
     emit('card:tap', { instanceId, tapped });
@@ -379,6 +511,62 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     saveUndoSnapshot();
     emit('card:counter', { instanceId, counterType, delta, label });
   }, [emit, saveUndoSnapshot]);
+
+  const bulkAddCounter = useCallback((instanceIds: string[], counterType: string, delta: number, label?: string) => {
+    if (instanceIds.length === 0) return;
+    saveUndoSnapshot();
+    if (isSandboxRef.current) {
+      const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+      const roomId = gameRoomIdRef.current;
+      if (!activePid || !roomId) return;
+      // Apply all counter changes in a single setRoom call
+      setRoom(prev => {
+        if (!prev) return prev;
+        let current = prev;
+        for (const id of instanceIds) {
+          const card = current.cards[id];
+          if (!card || card.zone !== 'battlefield') continue;
+          const first = card.counters[0];
+          const ct = first ? first.type : counterType;
+          const lb = first ? first.label : label;
+          current = applyLocalSandboxAction(current, 'card:counter', { gameRoomId: roomId, playerId: activePid, instanceId: id, counterType: ct, delta, label: lb, _skipLog: true }, activePid);
+        }
+        // Add a summary log entry
+        const player = current.players[activePid];
+        if (player) {
+          const sign = delta >= 0 ? '+' : '';
+          const desc = `${player.playerName}: ${sign}${delta} counter on ${instanceIds.length} cards`;
+          const entry: GameAction = {
+            id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: new Date().toISOString(),
+            playerId: activePid,
+            playerName: player.playerName,
+            type: 'counter_change',
+            description: desc,
+          };
+          current = { ...current, actionLog: appendLog(current.actionLog, entry) };
+        }
+        return current;
+      });
+    } else {
+      for (const id of instanceIds) {
+        emit('card:counter', { instanceId: id, counterType, delta, label });
+      }
+    }
+  }, [emit, saveUndoSnapshot]);
+
+  const resetCounters = useCallback((instanceId: string) => {
+    saveUndoSnapshot();
+    emit('card:counter:reset', { instanceId });
+  }, [emit, saveUndoSnapshot]);
+
+  const revealCards = useCallback((instanceIds: string[]) => {
+    emit('card:reveal', { instanceIds });
+  }, [emit]);
+
+  const shakeCards = useCallback((instanceIds: string[]) => {
+    emit('card:shake', { instanceIds });
+  }, [emit]);
 
   // ── Player actions ────────────────────────────────────────────────────────
 
@@ -507,9 +695,80 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('game:message', { text });
   }, [emit]);
 
+  const rollDice = useCallback((faces: number, result: number) => {
+    emit('game:dice-roll', { faces, result });
+  }, [emit]);
+
+  // ── Turn order ────────────────────────────────────────────────────────────
+
+  const passTurn = useCallback(() => {
+    emit('game:pass-turn', {});
+  }, [emit]);
+
+  // ── Targeting arrows (client-only) ────────────────────────────────────────
+
+  const isTargetingMode = targetingSource !== null;
+
+  const startTargeting = useCallback((sourceInstanceId: string) => {
+    setTargetingSource(sourceInstanceId);
+  }, []);
+
+  const cancelTargeting = useCallback(() => {
+    setTargetingSource(null);
+  }, []);
+
+  const completeTargeting = useCallback((targetId: string) => {
+    const source = targetingSource;
+    if (!source) return;
+    setTargetingSource(null);
+    const arrowId = makeLogId();
+    const createdAt = Date.now();
+    setTargetingArrows(prev => [...prev, { id: arrowId, fromId: source, toId: targetId, createdAt }]);
+    // Auto-remove arrow after 5 seconds
+    setTimeout(() => {
+      setTargetingArrows(prev => prev.filter(a => a.id !== arrowId));
+    }, 5000);
+    // Append client-side log entry
+    const currentRoom = roomRef.current;
+    const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+    if (currentRoom && activePid) {
+      const me = currentRoom.players[activePid];
+      const myName = me?.playerName ?? 'Player';
+      const fromCard = currentRoom.cards[source];
+      // targetId may be a card instanceId or a playerId
+      const toCard = currentRoom.cards[targetId];
+      const toPlayer = currentRoom.players[targetId];
+      const fromName = fromCard?.name ?? source;
+      const toName = toCard?.name ?? toPlayer?.playerName ?? targetId;
+      const entry: GameAction = {
+        id: makeLogId(),
+        timestamp: new Date().toISOString(),
+        playerId: activePid,
+        playerName: myName,
+        type: 'targeting',
+        description: `${myName}: ${fromName} targets ${toName}`,
+      };
+      setRoom(prev => prev ? { ...prev, actionLog: appendLog(prev.actionLog, entry) } : prev);
+    }
+  }, [targetingSource]);
+
+  const dismissArrow = useCallback((arrowId: string) => {
+    setTargetingArrows(prev => prev.filter(a => a.id !== arrowId));
+  }, []);
+
+  const clearAllArrows = useCallback(() => {
+    setTargetingArrows([]);
+  }, []);
+
   // ── Derived helpers (use activeSandboxPlayerId in sandbox) ────────────────
 
   const effectivePlayerId = isSandbox ? (activeSandboxPlayerId ?? playerId) : playerId;
+
+  // Turn order derived values
+  const activePlayerId = room?.turnOrder?.length
+    ? room.turnOrder[room.activePlayerIndex % room.turnOrder.length] ?? null
+    : null;
+  const isMyTurn = activePlayerId === effectivePlayerId;
 
   const myPlayer = room && effectivePlayerId ? (room.players[effectivePlayerId] ?? null) : null;
 
@@ -541,7 +800,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <GameTableContext.Provider value={{
-      room, playerId, playerName, gameRoomId,
+      room, playerId, effectivePlayerId, playerName, gameRoomId,
       loading, error, connected,
       scryCards, scryInstanceIds, scryMode,
       canUndo, undo,
@@ -549,11 +808,14 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       myGraveyardCards, myExileCards, myCommandZoneCards,
       createGame, joinGame, importDeck, leaveGame, loadSandbox, isSandbox,
       activeSandboxPlayerId, setActiveSandboxPlayer,
-      moveCard, changeZone, tapCard, tapAll, untapAll, setFaceDown, addCounter,
+      moveCard, changeZone, bulkChangeZone, tapCard, tapAll, untapAll, setFaceDown, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
       adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast,
       drawCards, shuffleLibrary, scry, resolveScry, mulligan,
       createToken,
+      passTurn, activePlayerId, isMyTurn,
+      targetingArrows, isTargetingMode, startTargeting, cancelTargeting, completeTargeting, dismissArrow, clearAllArrows,
       concede, sendMessage,
+      rollDice,
     }}>
       {children}
     </GameTableContext.Provider>
@@ -648,12 +910,35 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       const existing = card.counters.find(c => c.type === payload.counterType && c.label === payload.label);
       let counters = [...card.counters];
       if (existing) {
-        const val = Math.max(0, existing.value + payload.delta);
-        counters = val === 0 ? counters.filter(c => c !== existing) : counters.map(c => c === existing ? { ...c, value: val } : c);
-      } else if (payload.delta > 0) {
+        const val = existing.value + payload.delta;
+        counters = counters.map(c => c === existing ? { ...c, value: val } : c);
+      } else if (payload.delta !== 0) {
         counters = [...counters, { type: payload.counterType, value: payload.delta, label: payload.label }];
       }
-      return applyDelta(room, { type: 'counters_changed', instanceId: payload.instanceId, counters }, myPlayerId);
+      const afterCounters = applyDelta(room, { type: 'counters_changed', instanceId: payload.instanceId, counters }, myPlayerId);
+      if (payload._skipLog) return afterCounters;
+      const labelText = 'counter';
+      const counterSign = (payload.delta as number) >= 0 ? '+' : '';
+      const counterDesc = `${myName}: ${card.name} ${counterSign}${payload.delta} ${labelText}`;
+      return { ...afterCounters, actionLog: appendLog(afterCounters.actionLog, log('counter_change', counterDesc)) };
+    }
+
+    case 'card:counter:reset': {
+      const card = room.cards[payload.instanceId];
+      if (!card) return room;
+      return applyDelta(room, { type: 'counters_changed', instanceId: payload.instanceId, counters: [] }, myPlayerId);
+    }
+
+    case 'card:reveal': {
+      const instanceIds = payload.instanceIds as string[];
+      const names = instanceIds.map(id => room.cards[id]?.name).filter((n): n is string => !!n);
+      let desc: string;
+      if (names.length === 1) {
+        desc = `${myName} revealed ${names[0]}`;
+      } else {
+        desc = `${myName} revealed ${names.length} cards: ${names.join(', ')}`;
+      }
+      return { ...room, actionLog: appendLog(room.actionLog, log('reveal', desc)) };
     }
 
     // Note: life events are intercepted in emit() for debounced logging — these just apply the state change.
@@ -669,7 +954,11 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
     case 'player:poison': {
       const player = room.players[myPlayerId];
       if (!player) return room;
-      return applyDelta(room, { type: 'poison_changed', playerId: myPlayerId, poisonCounters: Math.max(0, player.poisonCounters + payload.delta) }, myPlayerId);
+      const newPoison = Math.max(0, player.poisonCounters + payload.delta);
+      const poisonSign = (payload.delta as number) >= 0 ? '+' : '';
+      const poisonDesc = `${myName}: ${newPoison} poison (${poisonSign}${payload.delta})`;
+      const afterPoison = applyDelta(room, { type: 'poison_changed', playerId: myPlayerId, poisonCounters: newPoison }, myPlayerId);
+      return { ...afterPoison, actionLog: appendLog(afterPoison.actionLog, log('poison_change', poisonDesc)) };
     }
 
     case 'commander:cast': {
@@ -690,9 +979,7 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       if (!player) return room;
       const drawCount = Math.min(payload.count, player.libraryCardIds.length);
       const drawn = player.libraryCardIds.slice(0, drawCount).map(id => room.cards[id]!).filter(Boolean);
-      const drawDesc = drawn.length === 1
-        ? `${myName} drew ${drawn[0]!.name}`
-        : `${myName} drew ${drawn.length} card${drawn.length !== 1 ? 's' : ''}`;
+      const drawDesc = `${myName} drew ${drawn.length} card${drawn.length !== 1 ? 's' : ''}`;
       return applyDelta(room, {
         type: 'cards_drawn',
         drawn,
@@ -742,6 +1029,26 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       const token = { ...payload.template, instanceId: `sandbox-token-${Date.now()}`, scryfallId: 'token', imageUri: payload.template.imageUri ?? null, zone: 'battlefield', controller: myPlayerId, x: payload.x, y: payload.y, tapped: false, faceDown: false, flipped: false, counters: [], isCommander: false } as const;
       const tokenResult = { ...room, cards: { ...room.cards, [token.instanceId]: token } };
       return { ...tokenResult, actionLog: appendLog(tokenResult.actionLog, log('token', `${myName} created ${payload.template.name}`)) };
+    }
+
+    case 'game:dice-roll': {
+      const diceDesc = `${myName} rolled a d${payload.faces}: ${payload.result}`;
+      return { ...room, actionLog: appendLog(room.actionLog, log('dice_roll', diceDesc)) };
+    }
+
+    case 'game:pass-turn': {
+      const turnOrder = room.turnOrder ?? [];
+      if (turnOrder.length === 0) return room;
+      const nextIndex = (room.activePlayerIndex + 1) % turnOrder.length;
+      const nextPlayerId = turnOrder[nextIndex];
+      const nextPlayer = nextPlayerId ? room.players[nextPlayerId] : undefined;
+      const nextName = nextPlayer?.playerName ?? 'next player';
+      const passDesc = `${myName} passed the turn to ${nextName}`;
+      return {
+        ...room,
+        activePlayerIndex: nextIndex,
+        actionLog: appendLog(room.actionLog, log('turn_pass', passDesc)),
+      };
     }
 
     case 'game:concede':

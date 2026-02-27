@@ -8,7 +8,7 @@ interface LibraryStackProps {
 }
 
 export default function LibraryStack({ count, playerId }: LibraryStackProps) {
-  const { drawCards, shuffleLibrary, scry, playerId: myId } = useGameTable();
+  const { drawCards, shuffleLibrary, scry, effectivePlayerId: myId } = useGameTable();
   const [scryCount, setScryCount] = useState(1);
   const [showSearch, setShowSearch] = useState(false);
   const isOwner = playerId === myId;

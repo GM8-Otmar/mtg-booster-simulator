@@ -166,14 +166,31 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     const card = room.cards[instanceId]!;
     const existing = card.counters.find(c => c.type === counterType && c.label === label);
     if (existing) {
-      existing.value = Math.max(0, existing.value + delta);
-      if (existing.value === 0) card.counters = card.counters.filter(c => c !== existing);
-    } else if (delta > 0) {
+      existing.value = existing.value + delta;
+    } else if (delta !== 0) {
       card.counters.push({ type: counterType as any, value: delta, label });
     }
+    const labelText = 'counter';
+    const counterSign = delta >= 0 ? '+' : '';
+    const player = room.players[playerId];
+    const playerName = player?.playerName ?? 'Player';
+    gameService.appendLog(room, playerId, 'counter_change',
+      `${playerName}: ${card.name} ${counterSign}${delta} ${labelText}`);
     room.lastActivity = ts();
     await storage.saveGame(room);
-    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'counters_changed', instanceId, counters: card.counters });
+    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'counters_changed', instanceId, counters: card.counters, log: room.actionLog.at(-1) });
+  });
+
+  socket.on('card:counter:reset', async ({
+    gameRoomId, instanceId, playerId,
+  }: { gameRoomId: string; instanceId: string; playerId: string }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !room.cards[instanceId]) return;
+    const card = room.cards[instanceId]!;
+    card.counters = [];
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'counters_changed', instanceId, counters: [] });
   });
 
   // ── Life / poison ─────────────────────────────────────────────────────────
@@ -211,12 +228,17 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
   }: { gameRoomId: string; playerId: string; delta: number }) => {
     const room = await storage.loadGame(gameRoomId);
     if (!room || !room.players[playerId]) return;
-    room.players[playerId]!.poisonCounters = Math.max(0, room.players[playerId]!.poisonCounters + delta);
+    const player = room.players[playerId]!;
+    player.poisonCounters = Math.max(0, player.poisonCounters + delta);
+    const poisonSign = delta >= 0 ? '+' : '';
+    gameService.appendLog(room, playerId, 'poison_change',
+      `${player.playerName}: ${player.poisonCounters} poison (${poisonSign}${delta})`);
     room.lastActivity = ts();
     await storage.saveGame(room);
     io.to(ROOM(gameRoomId)).emit('game:delta', {
       type: 'poison_changed', playerId,
-      poisonCounters: room.players[playerId]!.poisonCounters,
+      poisonCounters: player.poisonCounters,
+      log: room.actionLog.at(-1),
     });
   });
 
@@ -406,6 +428,76 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     io.to(ROOM(gameRoomId)).emit('game:delta', {
       type: 'token_created', card, log: room.actionLog.at(-1),
     });
+  });
+
+  // ── Reveal cards ──────────────────────────────────────────────────────────
+
+  socket.on('card:reveal', async ({
+    gameRoomId, playerId, instanceIds,
+  }: { gameRoomId: string; playerId: string; instanceIds: string[] }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !room.players[playerId]) return;
+    const player = room.players[playerId]!;
+    const names = instanceIds.map(id => room.cards[id]?.name).filter((n): n is string => !!n);
+    let desc: string;
+    if (names.length === 1) {
+      desc = `${player.playerName} revealed ${names[0]}`;
+    } else {
+      desc = `${player.playerName} revealed ${names.length} cards: ${names.join(', ')}`;
+    }
+    gameService.appendLog(room, playerId, 'reveal', desc);
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'cards_revealed', playerId, log: room.actionLog.at(-1) });
+  });
+
+  // ── Dice roll ─────────────────────────────────────────────────────────────
+
+  socket.on('game:dice-roll', async ({
+    gameRoomId, playerId, faces, result,
+  }: { gameRoomId: string; playerId: string; faces: number; result: number }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !room.players[playerId]) return;
+    const player = room.players[playerId]!;
+    gameService.appendLog(room, playerId, 'dice_roll',
+      `${player.playerName} rolled a d${faces}: ${result}`);
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'message', log: room.actionLog.at(-1) });
+  });
+
+  // ── Pass turn ─────────────────────────────────────────────────────────────
+
+  socket.on('game:pass-turn', async ({
+    gameRoomId, playerId,
+  }: { gameRoomId: string; playerId: string }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !room.players[playerId]) return;
+    const turnOrder = room.turnOrder ?? [];
+    if (turnOrder.length === 0) return;
+    const nextIndex = (room.activePlayerIndex + 1) % turnOrder.length;
+    room.activePlayerIndex = nextIndex;
+    const nextPlayerId = turnOrder[nextIndex];
+    const nextPlayer = nextPlayerId ? room.players[nextPlayerId] : undefined;
+    const currentPlayer = room.players[playerId]!;
+    const passDesc = `${currentPlayer.playerName} passed the turn to ${nextPlayer?.playerName ?? 'next player'}`;
+    gameService.appendLog(room, playerId, 'turn_pass', passDesc);
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', {
+      type: 'turn_passed',
+      activePlayerIndex: nextIndex,
+      log: room.actionLog.at(-1),
+    });
+  });
+
+  // ── Shake cards ──────────────────────────────────────────────────────────
+
+  socket.on('card:shake', async ({
+    gameRoomId, instanceIds,
+  }: { gameRoomId: string; playerId: string; instanceIds: string[] }) => {
+    // Visual-only broadcast — no persistent state change
+    io.to(ROOM(gameRoomId)).emit('game:shake', { instanceIds });
   });
 
   // ── Concede ───────────────────────────────────────────────────────────────
