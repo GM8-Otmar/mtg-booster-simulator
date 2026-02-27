@@ -49,8 +49,8 @@ export default function GameActionLog({ actions }: GameActionLogProps) {
           <p className="text-cream-muted/40 text-xs italic">No actions yet…</p>
         ) : (
           actions.map(action => (
-            <div key={action.id} className="flex gap-2 items-start">
-              <span className="text-[9px] text-cream-muted/50 font-mono shrink-0 mt-0.5">
+            <div key={action.id} className="py-0.5">
+              <span className="text-[9px] text-cream/60 font-mono block">
                 {formatTime(action.timestamp)}
               </span>
               <p className={`text-xs leading-snug ${ACTION_COLORS[action.type] ?? 'text-cream-muted'}`}>

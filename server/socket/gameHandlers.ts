@@ -170,13 +170,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     } else if (delta !== 0) {
       card.counters.push({ type: counterType as any, value: delta, label });
     }
-    const counterLabelMap: Record<string, string> = {
-      plus1plus1: '+1/+1',
-      minus1minus1: '-1/-1',
-      loyalty: 'Loyalty',
-      charge: 'Charge',
-    };
-    const labelText = counterLabelMap[counterType] ?? label ?? 'counter';
+    const labelText = 'counter';
     const counterSign = delta >= 0 ? '+' : '';
     const player = room.players[playerId];
     const playerName = player?.playerName ?? 'Player';
@@ -495,6 +489,15 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
       activePlayerIndex: nextIndex,
       log: room.actionLog.at(-1),
     });
+  });
+
+  // ── Shake cards ──────────────────────────────────────────────────────────
+
+  socket.on('card:shake', async ({
+    gameRoomId, instanceIds,
+  }: { gameRoomId: string; playerId: string; instanceIds: string[] }) => {
+    // Visual-only broadcast — no persistent state change
+    io.to(ROOM(gameRoomId)).emit('game:shake', { instanceIds });
   });
 
   // ── Concede ───────────────────────────────────────────────────────────────

@@ -47,7 +47,7 @@ function CommandCard({ card, isOwner, onContextMenu, onCast, onInspect }: {
 }
 
 export default function CommandZone({ cards, commanderTax, playerId: ownerId }: CommandZoneProps) {
-  const { notifyCommanderCast, changeZone, playerId: myId } = useGameTable();
+  const { notifyCommanderCast, changeZone, effectivePlayerId: myId } = useGameTable();
   const { inspect } = useCardInspector();
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
 

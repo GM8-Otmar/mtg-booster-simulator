@@ -24,6 +24,8 @@ export interface GameTableContextType {
   // state
   room: GameRoom | null;
   playerId: string | null;
+  /** In sandbox multi-player, this is the active sandbox player; otherwise same as playerId */
+  effectivePlayerId: string | null;
   playerName: string | null;
   gameRoomId: string | null;
   loading: boolean;
@@ -67,6 +69,8 @@ export interface GameTableContextType {
   addCounter: (instanceId: string, counterType: string, delta: number, label?: string) => void;
   resetCounters: (instanceId: string) => void;
   revealCards: (instanceIds: string[]) => void;
+  shakeCards: (instanceIds: string[]) => void;
+  shakingCardIds: Set<string>;
 
   // player actions
   adjustLife: (delta: number) => void;
@@ -91,7 +95,7 @@ export interface GameTableContextType {
   isMyTurn: boolean;
 
   // targeting arrows (client-only state)
-  targetingArrows: Array<{ id: string; fromId: string; toId: string }>;
+  targetingArrows: Array<{ id: string; fromId: string; toId: string; createdAt: number }>;
   isTargetingMode: boolean;
   startTargeting: (sourceInstanceId: string) => void;
   cancelTargeting: () => void;
@@ -131,8 +135,11 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   const [activeSandboxPlayerId, setActiveSandboxPlayerIdState] = useState<string | null>(null);
 
   // targeting arrows (client-only)
-  const [targetingArrows, setTargetingArrows] = useState<Array<{ id: string; fromId: string; toId: string }>>([]);
+  const [targetingArrows, setTargetingArrows] = useState<Array<{ id: string; fromId: string; toId: string; createdAt: number }>>([]);
   const [targetingSource, setTargetingSource] = useState<string | null>(null);
+
+  // shaking cards (visual-only, temporary)
+  const [shakingCardIds, setShakingCardIds] = useState<Set<string>>(new Set());
 
   const socketRef = useRef<Socket | null>(null);
   const playerIdRef = useRef<string | null>(null);
@@ -170,6 +177,19 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
         if (!prev) return prev;
         return applyDelta(prev, delta, playerIdRef.current);
       });
+    });
+
+    // Shake effect — visual only, auto-clears after 600ms
+    sock.on('game:shake', ({ instanceIds }: { instanceIds: string[] }) => {
+      const ids = new Set<string>(instanceIds);
+      setShakingCardIds(prev => new Set([...prev, ...ids]));
+      setTimeout(() => {
+        setShakingCardIds(prev => {
+          const next = new Set(prev);
+          for (const id of ids) next.delete(id);
+          return next;
+        });
+      }, 600);
     });
 
     // Scry reveal — only arrives at the scryer's socket
@@ -340,6 +360,20 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // ── Shake: visual-only, no room state change ──────────────────────────────
+      if (event === 'card:shake') {
+        const ids = new Set<string>((payload as any).instanceIds as string[]);
+        setShakingCardIds(prev => new Set([...prev, ...ids]));
+        setTimeout(() => {
+          setShakingCardIds(prev => {
+            const next = new Set(prev);
+            for (const id of ids) next.delete(id);
+            return next;
+          });
+        }, 600);
+        return;
+      }
+
       // ── All other sandbox events ─────────────────────────────────────────────
       setRoom(prev => {
         if (!prev) return prev;
@@ -410,6 +444,10 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
 
   const revealCards = useCallback((instanceIds: string[]) => {
     emit('card:reveal', { instanceIds });
+  }, [emit]);
+
+  const shakeCards = useCallback((instanceIds: string[]) => {
+    emit('card:shake', { instanceIds });
   }, [emit]);
 
   // ── Player actions ────────────────────────────────────────────────────────
@@ -566,7 +604,12 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     if (!source) return;
     setTargetingSource(null);
     const arrowId = makeLogId();
-    setTargetingArrows(prev => [...prev, { id: arrowId, fromId: source, toId: targetId }]);
+    const createdAt = Date.now();
+    setTargetingArrows(prev => [...prev, { id: arrowId, fromId: source, toId: targetId, createdAt }]);
+    // Auto-remove arrow after 5 seconds
+    setTimeout(() => {
+      setTargetingArrows(prev => prev.filter(a => a.id !== arrowId));
+    }, 5000);
     // Append client-side log entry
     const currentRoom = roomRef.current;
     const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
@@ -639,7 +682,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <GameTableContext.Provider value={{
-      room, playerId, playerName, gameRoomId,
+      room, playerId, effectivePlayerId, playerName, gameRoomId,
       loading, error, connected,
       scryCards, scryInstanceIds, scryMode,
       canUndo, undo,
@@ -647,7 +690,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       myGraveyardCards, myExileCards, myCommandZoneCards,
       createGame, joinGame, importDeck, leaveGame, loadSandbox, isSandbox,
       activeSandboxPlayerId, setActiveSandboxPlayer,
-      moveCard, changeZone, tapCard, tapAll, untapAll, setFaceDown, addCounter, resetCounters, revealCards,
+      moveCard, changeZone, tapCard, tapAll, untapAll, setFaceDown, addCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
       adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast,
       drawCards, shuffleLibrary, scry, resolveScry, mulligan,
       createToken,
@@ -754,13 +797,7 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       } else if (payload.delta !== 0) {
         counters = [...counters, { type: payload.counterType, value: payload.delta, label: payload.label }];
       }
-      const counterLabelMap: Record<string, string> = {
-        plus1plus1: '+1/+1',
-        minus1minus1: '-1/-1',
-        loyalty: 'Loyalty',
-        charge: 'Charge',
-      };
-      const labelText = counterLabelMap[payload.counterType as string] ?? (payload.label as string | undefined) ?? 'counter';
+      const labelText = 'counter';
       const counterSign = (payload.delta as number) >= 0 ? '+' : '';
       const counterDesc = `${myName}: ${card.name} ${counterSign}${payload.delta} ${labelText}`;
       const afterCounters = applyDelta(room, { type: 'counters_changed', instanceId: payload.instanceId, counters }, myPlayerId);
@@ -823,9 +860,7 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       if (!player) return room;
       const drawCount = Math.min(payload.count, player.libraryCardIds.length);
       const drawn = player.libraryCardIds.slice(0, drawCount).map(id => room.cards[id]!).filter(Boolean);
-      const drawDesc = drawn.length === 1
-        ? `${myName} drew ${drawn[0]!.name}`
-        : `${myName} drew ${drawn.length} card${drawn.length !== 1 ? 's' : ''}`;
+      const drawDesc = `${myName} drew ${drawn.length} card${drawn.length !== 1 ? 's' : ''}`;
       return applyDelta(room, {
         type: 'cards_drawn',
         drawn,

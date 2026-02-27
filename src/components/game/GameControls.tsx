@@ -25,7 +25,7 @@ const COMMON_TOKENS: TokenTemplate[] = [
 export default function GameControls({ onConcede }: GameControlsProps) {
   const {
     drawCards, shuffleLibrary, untapAll, tapAll,
-    mulligan, createToken, sendMessage, myLibraryCount,
+    mulligan, createToken, myLibraryCount,
   } = useGameTable();
 
   const [showImport, setShowImport] = useState(false);
@@ -33,13 +33,6 @@ export default function GameControls({ onConcede }: GameControlsProps) {
   const [showTokenCreator, setShowTokenCreator] = useState(false);
   const [showDiceRoller, setShowDiceRoller] = useState(false);
   const [showConfirmConcede, setShowConfirmConcede] = useState(false);
-  const [chatText, setChatText] = useState('');
-
-  const handleSendChat = () => {
-    if (!chatText.trim()) return;
-    sendMessage(chatText.trim());
-    setChatText('');
-  };
 
   const handleCreateToken = (template: TokenTemplate, count = 1) => {
     for (let i = 0; i < count; i++) {
@@ -139,25 +132,6 @@ export default function GameControls({ onConcede }: GameControlsProps) {
       >
         Import / Reload Deck
       </button>
-
-      {/* Chat */}
-      <div className="flex gap-1 mt-1">
-        <input
-          type="text"
-          value={chatText}
-          onChange={e => setChatText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSendChat()}
-          placeholder="Message…"
-          className="flex-1 text-xs bg-navy border border-cyan-dim rounded-lg px-2 py-1.5 text-cream placeholder-cream-muted/40 focus:outline-none focus:border-cyan"
-        />
-        <button
-          onClick={handleSendChat}
-          disabled={!chatText.trim()}
-          className="px-2 py-1.5 bg-navy-light border border-cyan-dim rounded-lg text-cream-muted text-xs hover:text-cream disabled:opacity-40 transition-all"
-        >
-          →
-        </button>
-      </div>
 
       {/* Concede */}
       {!showConfirmConcede ? (

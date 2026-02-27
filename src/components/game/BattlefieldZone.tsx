@@ -34,8 +34,9 @@ export default function BattlefieldZone({
   heightClass = 'flex-1 min-h-0',
 }: BattlefieldZoneProps) {
   const {
-    tapCard, changeZone, moveCard, playerId,
+    tapCard, changeZone, moveCard, effectivePlayerId: playerId,
     targetingArrows, isTargetingMode, cancelTargeting, dismissArrow,
+    shakeCards,
   } = useGameTable();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -66,6 +67,8 @@ export default function BattlefieldZone({
   useEffect(() => { isTargetingModeRef.current = isTargetingMode; }, [isTargetingMode]);
   const cancelTargetingRef = useRef(cancelTargeting);
   useEffect(() => { cancelTargetingRef.current = cancelTargeting; }, [cancelTargeting]);
+  const shakeCardsRef = useRef(shakeCards);
+  useEffect(() => { shakeCardsRef.current = shakeCards; }, [shakeCards]);
 
   // ── Escape clears selection (or cancels targeting); Space taps/untaps selected
   useEffect(() => {
@@ -78,10 +81,11 @@ export default function BattlefieldZone({
         }
         return;
       }
+      // Skip if focused on a text input
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
       if (e.key === ' ') {
-        // Skip if focused on a text input
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         const sel = selectedIdsRef.current;
         if (sel.size === 0) return;
         e.preventDefault();
@@ -96,6 +100,11 @@ export default function BattlefieldZone({
         for (const c of selectedCards) {
           tapCardRef.current(c.instanceId, targetTapped);
         }
+      } else if (e.key === 'h') {
+        const sel = selectedIdsRef.current;
+        if (sel.size === 0) return;
+        e.preventDefault();
+        shakeCardsRef.current([...sel]);
       }
     };
     document.addEventListener('keydown', handler);
@@ -415,7 +424,11 @@ export default function BattlefieldZone({
                 strokeWidth="3"
                 strokeLinecap="round"
                 markerEnd="url(#arrow-tip)"
-                style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                style={{
+                  pointerEvents: 'stroke',
+                  cursor: 'pointer',
+                  animation: 'arrow-fade 5s ease-out forwards',
+                }}
                 onClick={() => dismissArrow(arrow.id)}
               />
             );
