@@ -62,11 +62,15 @@ export interface GameTableContextType {
   // game actions
   moveCard: (instanceId: string, x: number, y: number, persist: boolean) => void;
   changeZone: (instanceId: string, toZone: GameZone, toIndex?: number) => void;
+  /** Move multiple cards to a zone at once (avoids batching issues) */
+  bulkChangeZone: (instanceIds: string[], toZone: GameZone, toIndex?: number) => void;
   tapCard: (instanceId: string, tapped: boolean) => void;
   tapAll: (filter?: 'all' | 'lands') => void;
   untapAll: () => void;
   setFaceDown: (instanceId: string, faceDown: boolean) => void;
   addCounter: (instanceId: string, counterType: string, delta: number, label?: string) => void;
+  /** Apply a counter change to multiple cards at once (avoids batching issues) */
+  bulkAddCounter: (instanceIds: string[], counterType: string, delta: number, label?: string) => void;
   resetCounters: (instanceId: string) => void;
   revealCards: (instanceIds: string[]) => void;
   shakeCards: (instanceIds: string[]) => void;
@@ -461,6 +465,29 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('card:zone', { instanceId, toZone, toIndex });
   }, [emit, saveUndoSnapshot]);
 
+  const bulkChangeZone = useCallback((instanceIds: string[], toZone: GameZone, toIndex?: number) => {
+    if (instanceIds.length === 0) return;
+    saveUndoSnapshot();
+    if (isSandboxRef.current) {
+      const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+      const roomId = gameRoomIdRef.current;
+      if (!activePid || !roomId) return;
+      // Apply all zone changes in a single setRoom call
+      setRoom(prev => {
+        if (!prev) return prev;
+        let current = prev;
+        for (const id of instanceIds) {
+          current = applyLocalSandboxAction(current, 'card:zone', { gameRoomId: roomId, playerId: activePid, instanceId: id, toZone, toIndex }, activePid);
+        }
+        return current;
+      });
+    } else {
+      for (const id of instanceIds) {
+        emit('card:zone', { instanceId: id, toZone, toIndex });
+      }
+    }
+  }, [emit, saveUndoSnapshot]);
+
   const tapCard = useCallback((instanceId: string, tapped: boolean) => {
     saveUndoSnapshot();
     emit('card:tap', { instanceId, tapped });
@@ -483,6 +510,49 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   const addCounter = useCallback((instanceId: string, counterType: string, delta: number, label?: string) => {
     saveUndoSnapshot();
     emit('card:counter', { instanceId, counterType, delta, label });
+  }, [emit, saveUndoSnapshot]);
+
+  const bulkAddCounter = useCallback((instanceIds: string[], counterType: string, delta: number, label?: string) => {
+    if (instanceIds.length === 0) return;
+    saveUndoSnapshot();
+    if (isSandboxRef.current) {
+      const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+      const roomId = gameRoomIdRef.current;
+      if (!activePid || !roomId) return;
+      // Apply all counter changes in a single setRoom call
+      setRoom(prev => {
+        if (!prev) return prev;
+        let current = prev;
+        for (const id of instanceIds) {
+          const card = current.cards[id];
+          if (!card || card.zone !== 'battlefield') continue;
+          const first = card.counters[0];
+          const ct = first ? first.type : counterType;
+          const lb = first ? first.label : label;
+          current = applyLocalSandboxAction(current, 'card:counter', { gameRoomId: roomId, playerId: activePid, instanceId: id, counterType: ct, delta, label: lb, _skipLog: true }, activePid);
+        }
+        // Add a summary log entry
+        const player = current.players[activePid];
+        if (player) {
+          const sign = delta >= 0 ? '+' : '';
+          const desc = `${player.playerName}: ${sign}${delta} counter on ${instanceIds.length} cards`;
+          const entry: GameAction = {
+            id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: new Date().toISOString(),
+            playerId: activePid,
+            playerName: player.playerName,
+            type: 'counter_change',
+            description: desc,
+          };
+          current = { ...current, actionLog: appendLog(current.actionLog, entry) };
+        }
+        return current;
+      });
+    } else {
+      for (const id of instanceIds) {
+        emit('card:counter', { instanceId: id, counterType, delta, label });
+      }
+    }
   }, [emit, saveUndoSnapshot]);
 
   const resetCounters = useCallback((instanceId: string) => {
@@ -738,7 +808,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       myGraveyardCards, myExileCards, myCommandZoneCards,
       createGame, joinGame, importDeck, leaveGame, loadSandbox, isSandbox,
       activeSandboxPlayerId, setActiveSandboxPlayer,
-      moveCard, changeZone, tapCard, tapAll, untapAll, setFaceDown, addCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
+      moveCard, changeZone, bulkChangeZone, tapCard, tapAll, untapAll, setFaceDown, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
       adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast,
       drawCards, shuffleLibrary, scry, resolveScry, mulligan,
       createToken,

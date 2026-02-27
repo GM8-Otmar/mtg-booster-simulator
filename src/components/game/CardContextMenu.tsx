@@ -25,8 +25,8 @@ interface MenuItem {
 
 export default function CardContextMenu({ card, x, y, onClose, selectedCards }: CardContextMenuProps) {
   const {
-    changeZone, tapCard, setFaceDown,
-    addCounter, resetCounters, notifyCommanderCast,
+    changeZone, bulkChangeZone, tapCard, setFaceDown,
+    addCounter, bulkAddCounter, resetCounters, notifyCommanderCast,
     createToken, revealCards, startTargeting, effectivePlayerId: playerId,
   } = useGameTable();
 
@@ -93,31 +93,22 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
       label: 'Move all to…',
       items: zones.map(z => ({
         label: z.label,
-        action: () => doAll(c => changeZone(c.instanceId, z.zone, z.toIndex)),
+        action: () => { bulkChangeZone(targets.map(c => c.instanceId), z.zone, z.toIndex); onClose(); },
       })),
     });
 
     if (onBattlefield) {
+      const bfIds = targets.filter(c => c.zone === 'battlefield').map(c => c.instanceId);
       sections.push({
         label: 'Counters (all)',
         items: [
           {
             label: 'Counter +1 all',
-            action: () => doAll(c => {
-              if (c.zone !== 'battlefield') return;
-              const first = c.counters[0];
-              if (first) addCounter(c.instanceId, first.type, 1, first.label);
-              else addCounter(c.instanceId, 'generic', 1);
-            }),
+            action: () => { bulkAddCounter(bfIds, 'generic', 1); onClose(); },
           },
           {
             label: 'Counter -1 all',
-            action: () => doAll(c => {
-              if (c.zone !== 'battlefield') return;
-              const first = c.counters[0];
-              if (first) addCounter(c.instanceId, first.type, -1, first.label);
-              else addCounter(c.instanceId, 'generic', -1);
-            }),
+            action: () => { bulkAddCounter(bfIds, 'generic', -1); onClose(); },
           },
         ],
       });
