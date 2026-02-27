@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGameTable } from '../contexts/GameTableContext';
 import GameLobby from '../components/game/GameLobby';
 import BattlefieldZone from '../components/game/BattlefieldZone';
@@ -19,25 +19,69 @@ export default function GameTablePage() {
     myPlayer, myHandCards, myBattlefieldCards,
     scryCards, scryInstanceIds, scryMode,
     canUndo, undo,
+    untapAll, drawCards, mulligan,
     concede, connected, gameRoomId, isSandbox,
     activeSandboxPlayerId, setActiveSandboxPlayer,
+    passTurn, activePlayerId, isMyTurn,
   } = useGameTable();
 
   const [atTable, setAtTable] = useState(false);
   const [showImportAfterJoin, setShowImportAfterJoin] = useState(false);
 
-  // ── Ctrl+Z undo listener ───────────────────────────────────────────────────
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!atTable) return;
     const handler = (e: KeyboardEvent) => {
+      // Skip if focused on a text input
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      // Skip if a modal is open (scry overlay)
+      if (scryCards.length > 0) return;
+
+      // Ctrl/Cmd+Z → undo
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         if (canUndo) undo();
+        return;
+      }
+
+      // Single-key shortcuts — skip if any modifier held
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      if (e.key === 'x') {
+        e.preventDefault();
+        untapAll();
+      } else if (e.key === 'c') {
+        e.preventDefault();
+        drawCards(1);
+      } else if (e.key === 'm') {
+        e.preventDefault();
+        mulligan(7);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [atTable, canUndo, undo]);
+  }, [atTable, canUndo, undo, untapAll, drawCards, mulligan, scryCards.length]);
+
+  // ── Ding sound when it becomes your turn ─────────────────────────────────
+  const prevIsMyTurnRef = useRef(false);
+  useEffect(() => {
+    if (atTable && isMyTurn && !prevIsMyTurnRef.current) {
+      try {
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      } catch { /* ignore audio errors */ }
+    }
+    prevIsMyTurnRef.current = isMyTurn;
+  }, [isMyTurn, atTable]);
 
   if (!room || !atTable) {
     return (
@@ -89,9 +133,32 @@ export default function GameTablePage() {
           ))}
         </div>
 
-        {/* Zone count HUD — center/right of top bar */}
-        <div className="flex-1 flex justify-center">
+        {/* Zone count HUD — center of top bar */}
+        <div className="flex-1 flex justify-center items-center gap-3">
           <ZoneCountHUD />
+          {room.turnOrder && room.turnOrder.length > 0 && (() => {
+            const activeId = room.turnOrder[room.activePlayerIndex % room.turnOrder.length];
+            const activeName = room.players[activeId]?.playerName ?? 'Unknown';
+            return (
+              <div className="flex items-center gap-2">
+                {isMyTurn ? (
+                  <>
+                    <span className="text-orange-400 text-xs font-bold animate-pulse">Your Turn</span>
+                    <button
+                      onClick={passTurn}
+                      className="text-[11px] px-2.5 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/35 border border-orange-500/50 text-orange-300 hover:text-orange-200 font-semibold transition-all"
+                    >
+                      Pass →
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-cream-muted/60 text-xs">
+                    {activeName}&apos;s Turn
+                  </span>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

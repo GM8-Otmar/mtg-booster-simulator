@@ -83,6 +83,10 @@ export interface GameRoom {
 
   // rolling action log, last 50
   actionLog: GameAction[];
+
+  // turn order
+  turnOrder: string[];        // player IDs in play order
+  activePlayerIndex: number;  // index into turnOrder
 }
 
 // ---------- request / response shapes ----------

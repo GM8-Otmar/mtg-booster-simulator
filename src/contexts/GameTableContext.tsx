@@ -65,6 +65,8 @@ export interface GameTableContextType {
   untapAll: () => void;
   setFaceDown: (instanceId: string, faceDown: boolean) => void;
   addCounter: (instanceId: string, counterType: string, delta: number, label?: string) => void;
+  resetCounters: (instanceId: string) => void;
+  revealCards: (instanceIds: string[]) => void;
 
   // player actions
   adjustLife: (delta: number) => void;
@@ -83,9 +85,26 @@ export interface GameTableContextType {
   // tokens
   createToken: (template: TokenTemplate, x: number, y: number) => void;
 
+  // turn order
+  passTurn: () => void;
+  activePlayerId: string | null;
+  isMyTurn: boolean;
+
+  // targeting arrows (client-only state)
+  targetingArrows: Array<{ id: string; fromId: string; toId: string }>;
+  isTargetingMode: boolean;
+  startTargeting: (sourceInstanceId: string) => void;
+  cancelTargeting: () => void;
+  completeTargeting: (targetId: string) => void;
+  dismissArrow: (arrowId: string) => void;
+  clearAllArrows: () => void;
+
   // social
   concede: () => void;
   sendMessage: (text: string) => void;
+
+  // dice
+  rollDice: (faces: number, result: number) => void;
 }
 
 // ─── Context init ──────────────────────────────────────────────────────────
@@ -110,6 +129,10 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   const [isSandbox, setIsSandbox] = useState(false);
   const [undoSnapshot, setUndoSnapshot] = useState<GameRoom | null>(null);
   const [activeSandboxPlayerId, setActiveSandboxPlayerIdState] = useState<string | null>(null);
+
+  // targeting arrows (client-only)
+  const [targetingArrows, setTargetingArrows] = useState<Array<{ id: string; fromId: string; toId: string }>>([]);
+  const [targetingSource, setTargetingSource] = useState<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const playerIdRef = useRef<string | null>(null);
@@ -380,6 +403,15 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('card:counter', { instanceId, counterType, delta, label });
   }, [emit, saveUndoSnapshot]);
 
+  const resetCounters = useCallback((instanceId: string) => {
+    saveUndoSnapshot();
+    emit('card:counter:reset', { instanceId });
+  }, [emit, saveUndoSnapshot]);
+
+  const revealCards = useCallback((instanceIds: string[]) => {
+    emit('card:reveal', { instanceIds });
+  }, [emit]);
+
   // ── Player actions ────────────────────────────────────────────────────────
 
   const adjustLife = useCallback((delta: number) => {
@@ -507,9 +539,75 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('game:message', { text });
   }, [emit]);
 
+  const rollDice = useCallback((faces: number, result: number) => {
+    emit('game:dice-roll', { faces, result });
+  }, [emit]);
+
+  // ── Turn order ────────────────────────────────────────────────────────────
+
+  const passTurn = useCallback(() => {
+    emit('game:pass-turn', {});
+  }, [emit]);
+
+  // ── Targeting arrows (client-only) ────────────────────────────────────────
+
+  const isTargetingMode = targetingSource !== null;
+
+  const startTargeting = useCallback((sourceInstanceId: string) => {
+    setTargetingSource(sourceInstanceId);
+  }, []);
+
+  const cancelTargeting = useCallback(() => {
+    setTargetingSource(null);
+  }, []);
+
+  const completeTargeting = useCallback((targetId: string) => {
+    const source = targetingSource;
+    if (!source) return;
+    setTargetingSource(null);
+    const arrowId = makeLogId();
+    setTargetingArrows(prev => [...prev, { id: arrowId, fromId: source, toId: targetId }]);
+    // Append client-side log entry
+    const currentRoom = roomRef.current;
+    const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+    if (currentRoom && activePid) {
+      const me = currentRoom.players[activePid];
+      const myName = me?.playerName ?? 'Player';
+      const fromCard = currentRoom.cards[source];
+      // targetId may be a card instanceId or a playerId
+      const toCard = currentRoom.cards[targetId];
+      const toPlayer = currentRoom.players[targetId];
+      const fromName = fromCard?.name ?? source;
+      const toName = toCard?.name ?? toPlayer?.playerName ?? targetId;
+      const entry: GameAction = {
+        id: makeLogId(),
+        timestamp: new Date().toISOString(),
+        playerId: activePid,
+        playerName: myName,
+        type: 'targeting',
+        description: `${myName}: ${fromName} targets ${toName}`,
+      };
+      setRoom(prev => prev ? { ...prev, actionLog: appendLog(prev.actionLog, entry) } : prev);
+    }
+  }, [targetingSource]);
+
+  const dismissArrow = useCallback((arrowId: string) => {
+    setTargetingArrows(prev => prev.filter(a => a.id !== arrowId));
+  }, []);
+
+  const clearAllArrows = useCallback(() => {
+    setTargetingArrows([]);
+  }, []);
+
   // ── Derived helpers (use activeSandboxPlayerId in sandbox) ────────────────
 
   const effectivePlayerId = isSandbox ? (activeSandboxPlayerId ?? playerId) : playerId;
+
+  // Turn order derived values
+  const activePlayerId = room?.turnOrder?.length
+    ? room.turnOrder[room.activePlayerIndex % room.turnOrder.length] ?? null
+    : null;
+  const isMyTurn = activePlayerId === effectivePlayerId;
 
   const myPlayer = room && effectivePlayerId ? (room.players[effectivePlayerId] ?? null) : null;
 
@@ -549,11 +647,14 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       myGraveyardCards, myExileCards, myCommandZoneCards,
       createGame, joinGame, importDeck, leaveGame, loadSandbox, isSandbox,
       activeSandboxPlayerId, setActiveSandboxPlayer,
-      moveCard, changeZone, tapCard, tapAll, untapAll, setFaceDown, addCounter,
+      moveCard, changeZone, tapCard, tapAll, untapAll, setFaceDown, addCounter, resetCounters, revealCards,
       adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast,
       drawCards, shuffleLibrary, scry, resolveScry, mulligan,
       createToken,
+      passTurn, activePlayerId, isMyTurn,
+      targetingArrows, isTargetingMode, startTargeting, cancelTargeting, completeTargeting, dismissArrow, clearAllArrows,
       concede, sendMessage,
+      rollDice,
     }}>
       {children}
     </GameTableContext.Provider>
@@ -648,12 +749,40 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       const existing = card.counters.find(c => c.type === payload.counterType && c.label === payload.label);
       let counters = [...card.counters];
       if (existing) {
-        const val = Math.max(0, existing.value + payload.delta);
-        counters = val === 0 ? counters.filter(c => c !== existing) : counters.map(c => c === existing ? { ...c, value: val } : c);
-      } else if (payload.delta > 0) {
+        const val = existing.value + payload.delta;
+        counters = counters.map(c => c === existing ? { ...c, value: val } : c);
+      } else if (payload.delta !== 0) {
         counters = [...counters, { type: payload.counterType, value: payload.delta, label: payload.label }];
       }
-      return applyDelta(room, { type: 'counters_changed', instanceId: payload.instanceId, counters }, myPlayerId);
+      const counterLabelMap: Record<string, string> = {
+        plus1plus1: '+1/+1',
+        minus1minus1: '-1/-1',
+        loyalty: 'Loyalty',
+        charge: 'Charge',
+      };
+      const labelText = counterLabelMap[payload.counterType as string] ?? (payload.label as string | undefined) ?? 'counter';
+      const counterSign = (payload.delta as number) >= 0 ? '+' : '';
+      const counterDesc = `${myName}: ${card.name} ${counterSign}${payload.delta} ${labelText}`;
+      const afterCounters = applyDelta(room, { type: 'counters_changed', instanceId: payload.instanceId, counters }, myPlayerId);
+      return { ...afterCounters, actionLog: appendLog(afterCounters.actionLog, log('counter_change', counterDesc)) };
+    }
+
+    case 'card:counter:reset': {
+      const card = room.cards[payload.instanceId];
+      if (!card) return room;
+      return applyDelta(room, { type: 'counters_changed', instanceId: payload.instanceId, counters: [] }, myPlayerId);
+    }
+
+    case 'card:reveal': {
+      const instanceIds = payload.instanceIds as string[];
+      const names = instanceIds.map(id => room.cards[id]?.name).filter((n): n is string => !!n);
+      let desc: string;
+      if (names.length === 1) {
+        desc = `${myName} revealed ${names[0]}`;
+      } else {
+        desc = `${myName} revealed ${names.length} cards: ${names.join(', ')}`;
+      }
+      return { ...room, actionLog: appendLog(room.actionLog, log('reveal', desc)) };
     }
 
     // Note: life events are intercepted in emit() for debounced logging — these just apply the state change.
@@ -669,7 +798,11 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
     case 'player:poison': {
       const player = room.players[myPlayerId];
       if (!player) return room;
-      return applyDelta(room, { type: 'poison_changed', playerId: myPlayerId, poisonCounters: Math.max(0, player.poisonCounters + payload.delta) }, myPlayerId);
+      const newPoison = Math.max(0, player.poisonCounters + payload.delta);
+      const poisonSign = (payload.delta as number) >= 0 ? '+' : '';
+      const poisonDesc = `${myName}: ${newPoison} poison (${poisonSign}${payload.delta})`;
+      const afterPoison = applyDelta(room, { type: 'poison_changed', playerId: myPlayerId, poisonCounters: newPoison }, myPlayerId);
+      return { ...afterPoison, actionLog: appendLog(afterPoison.actionLog, log('poison_change', poisonDesc)) };
     }
 
     case 'commander:cast': {
@@ -742,6 +875,26 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       const token = { ...payload.template, instanceId: `sandbox-token-${Date.now()}`, scryfallId: 'token', imageUri: payload.template.imageUri ?? null, zone: 'battlefield', controller: myPlayerId, x: payload.x, y: payload.y, tapped: false, faceDown: false, flipped: false, counters: [], isCommander: false } as const;
       const tokenResult = { ...room, cards: { ...room.cards, [token.instanceId]: token } };
       return { ...tokenResult, actionLog: appendLog(tokenResult.actionLog, log('token', `${myName} created ${payload.template.name}`)) };
+    }
+
+    case 'game:dice-roll': {
+      const diceDesc = `${myName} rolled a d${payload.faces}: ${payload.result}`;
+      return { ...room, actionLog: appendLog(room.actionLog, log('dice_roll', diceDesc)) };
+    }
+
+    case 'game:pass-turn': {
+      const turnOrder = room.turnOrder ?? [];
+      if (turnOrder.length === 0) return room;
+      const nextIndex = (room.activePlayerIndex + 1) % turnOrder.length;
+      const nextPlayerId = turnOrder[nextIndex];
+      const nextPlayer = nextPlayerId ? room.players[nextPlayerId] : undefined;
+      const nextName = nextPlayer?.playerName ?? 'next player';
+      const passDesc = `${myName} passed the turn to ${nextName}`;
+      return {
+        ...room,
+        activePlayerIndex: nextIndex,
+        actionLog: appendLog(room.actionLog, log('turn_pass', passDesc)),
+      };
     }
 
     case 'game:concede':

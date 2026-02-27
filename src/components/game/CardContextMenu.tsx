@@ -26,8 +26,8 @@ interface MenuItem {
 export default function CardContextMenu({ card, x, y, onClose, selectedCards }: CardContextMenuProps) {
   const {
     changeZone, tapCard, setFaceDown,
-    addCounter, notifyCommanderCast,
-    createToken, playerId,
+    addCounter, resetCounters, notifyCommanderCast,
+    createToken, revealCards, playerId,
   } = useGameTable();
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -100,23 +100,29 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
 
     if (onBattlefield) {
       sections.push({
-        label: 'Add counter to all',
+        label: 'Counters (all)',
         items: [
           {
-            label: '+1/+1 counter (+)',
+            label: 'Add +1/+1 to all',
             action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'plus1plus1', 1); }),
           },
           {
-            label: '+1/+1 counter (−)',
-            action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'plus1plus1', -1); }),
+            label: 'Counter +1 all',
+            action: () => doAll(c => {
+              if (c.zone !== 'battlefield') return;
+              const first = c.counters[0];
+              if (first) addCounter(c.instanceId, first.type, 1, first.label);
+              else addCounter(c.instanceId, 'plus1plus1', 1);
+            }),
           },
           {
-            label: '−1/−1 counter (+)',
-            action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'minus1minus1', 1); }),
-          },
-          {
-            label: 'Charge counter (+)',
-            action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'charge', 1); }),
+            label: 'Counter -1 all',
+            action: () => doAll(c => {
+              if (c.zone !== 'battlefield') return;
+              const first = c.counters[0];
+              if (first) addCounter(c.instanceId, first.type, -1, first.label);
+              else addCounter(c.instanceId, 'plus1plus1', -1);
+            }),
           },
         ],
       });
@@ -142,6 +148,19 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
                 Math.min(96, c.y + 5),
               );
             }),
+          },
+        ],
+      });
+    }
+
+    // Reveal hand cards in bulk
+    const handTargets = targets.filter(c => c.zone === 'hand');
+    if (handTargets.length > 0) {
+      sections.push({
+        items: [
+          {
+            label: 'Reveal selected to all',
+            action: () => do_(() => revealCards(handTargets.map(c => c.instanceId))),
           },
         ],
       });
@@ -174,32 +193,87 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
     });
 
     if (card.zone === 'battlefield') {
+      const hasCounter = card.counters.length > 0;
+      const firstCounter = card.counters[0];
+      if (!hasCounter) {
+        sections.push({
+          label: 'Add Counter',
+          items: [
+            {
+              label: 'Add +1/+1 counter',
+              action: () => do_(() => addCounter(card.instanceId, 'plus1plus1', 1)),
+            },
+            {
+              label: 'Add Loyalty counter',
+              action: () => do_(() => addCounter(card.instanceId, 'loyalty', 1)),
+            },
+            {
+              label: 'Add Charge counter',
+              action: () => do_(() => addCounter(card.instanceId, 'charge', 1)),
+            },
+            {
+              label: 'Add generic counter',
+              action: () => do_(() => addCounter(card.instanceId, 'generic', 1, 'generic')),
+            },
+          ],
+        });
+      } else {
+        sections.push({
+          label: 'Counters',
+          items: [
+            {
+              label: 'Counter +1',
+              action: () => do_(() => firstCounter
+                ? addCounter(card.instanceId, firstCounter.type, 1, firstCounter.label)
+                : addCounter(card.instanceId, 'plus1plus1', 1)),
+            },
+            {
+              label: 'Counter -1',
+              action: () => do_(() => firstCounter
+                ? addCounter(card.instanceId, firstCounter.type, -1, firstCounter.label)
+                : addCounter(card.instanceId, 'plus1plus1', -1)),
+            },
+            {
+              label: 'Remove counter',
+              action: () => do_(() => resetCounters(card.instanceId)),
+              danger: true,
+            },
+            {
+              label: 'Set label: +1/+1',
+              action: () => do_(() => {
+                const total = card.counters.reduce((s, c) => s + c.value, 0);
+                resetCounters(card.instanceId);
+                if (total !== 0) addCounter(card.instanceId, 'plus1plus1', total);
+              }),
+            },
+            {
+              label: 'Set label: Loyalty',
+              action: () => do_(() => {
+                const total = card.counters.reduce((s, c) => s + c.value, 0);
+                resetCounters(card.instanceId);
+                if (total !== 0) addCounter(card.instanceId, 'loyalty', total);
+              }),
+            },
+            {
+              label: 'Set label: Charge',
+              action: () => do_(() => {
+                const total = card.counters.reduce((s, c) => s + c.value, 0);
+                resetCounters(card.instanceId);
+                if (total !== 0) addCounter(card.instanceId, 'charge', total);
+              }),
+            },
+          ],
+        });
+      }
+    }
+
+    // Reveal (hand cards only)
+    if (card.zone === 'hand') {
       sections.push({
-        label: 'Counters',
         items: [
           {
-            label: '+1/+1 counter (+)',
-            action: () => do_(() => addCounter(card.instanceId, 'plus1plus1', 1)),
-          },
-          {
-            label: '+1/+1 counter (−)',
-            action: () => do_(() => addCounter(card.instanceId, 'plus1plus1', -1)),
-          },
-          {
-            label: '−1/−1 counter (+)',
-            action: () => do_(() => addCounter(card.instanceId, 'minus1minus1', 1)),
-          },
-          {
-            label: 'Loyalty counter (+)',
-            action: () => do_(() => addCounter(card.instanceId, 'loyalty', 1)),
-          },
-          {
-            label: 'Loyalty counter (−)',
-            action: () => do_(() => addCounter(card.instanceId, 'loyalty', -1)),
-          },
-          {
-            label: 'Charge counter (+)',
-            action: () => do_(() => addCounter(card.instanceId, 'charge', 1)),
+            label: 'Reveal to all',
+            action: () => do_(() => revealCards([card.instanceId])),
           },
         ],
       });

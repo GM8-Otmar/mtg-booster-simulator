@@ -32,7 +32,7 @@ export default function BattlefieldCard({
   multiDragPos,
   isMultiDragLead,
 }: BattlefieldCardProps) {
-  const { moveCard, tapCard, changeZone, playerId } = useGameTable();
+  const { moveCard, tapCard, changeZone, addCounter, playerId } = useGameTable();
   const { inspect } = useCardInspector();
 
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -196,12 +196,16 @@ export default function BattlefieldCard({
     setMenuPos({ x: e.clientX, y: e.clientY });
   }, []);
 
-  // ── Counter badges ────────────────────────────────────────────────────────
+  // ── Counter badge ─────────────────────────────────────────────────────────
 
-  const totalPP = card.counters.filter(c => c.type === 'plus1plus1').reduce((s, c) => s + c.value, 0);
-  const totalMM = card.counters.filter(c => c.type === 'minus1minus1').reduce((s, c) => s + c.value, 0);
-  const loyalty = card.counters.find(c => c.type === 'loyalty')?.value ?? null;
-  const charge = card.counters.find(c => c.type === 'charge')?.value ?? null;
+  const counterTotal = card.counters.reduce((sum, c) => sum + c.value, 0);
+  const hasCounters = card.counters.length > 0;
+  const firstCounter = card.counters[0] ?? null;
+  const counterBgColor = counterTotal > 0
+    ? 'bg-green-600'
+    : counterTotal < 0
+      ? 'bg-red-600'
+      : 'bg-gray-500';
 
   const borderColor = isOwner ? 'border-cyan/40' : 'border-magenta/40';
 
@@ -271,28 +275,23 @@ export default function BattlefieldCard({
           </div>
         )}
 
-        {(totalPP !== 0 || totalMM !== 0 || loyalty !== null || charge !== null) && (
-          <div className="absolute bottom-0 left-0 right-0 flex gap-1 justify-center pb-1 flex-wrap z-20">
-            {totalPP !== 0 && (
-              <span className="bg-green-600 text-white text-[9px] font-bold rounded-full px-1.5 shadow">
-                +{totalPP}/+{totalPP}
-              </span>
-            )}
-            {totalMM !== 0 && (
-              <span className="bg-red-700 text-white text-[9px] font-bold rounded-full px-1.5 shadow">
-                −{totalMM}/−{totalMM}
-              </span>
-            )}
-            {loyalty !== null && (
-              <span className="bg-blue-600 text-white text-[9px] font-bold rounded-full px-1.5 shadow">
-                👁 {loyalty}
-              </span>
-            )}
-            {charge !== null && (
-              <span className="bg-yellow-600 text-white text-[9px] font-bold rounded-full px-1.5 shadow">
-                ⚡{charge}
-              </span>
-            )}
+        {hasCounters && (
+          <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-1 z-20">
+            <span
+              title={firstCounter ? (firstCounter.label ?? firstCounter.type) : undefined}
+              className={`${counterBgColor} text-white text-[10px] font-bold rounded-full min-w-[24px] h-6 flex items-center justify-center px-1.5 shadow cursor-pointer select-none`}
+              onClick={e => {
+                e.stopPropagation();
+                if (firstCounter) addCounter(card.instanceId, firstCounter.type, 1, firstCounter.label);
+              }}
+              onContextMenu={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (firstCounter) addCounter(card.instanceId, firstCounter.type, -1, firstCounter.label);
+              }}
+            >
+              {counterTotal > 0 ? `+${counterTotal}` : counterTotal}
+            </span>
           </div>
         )}
 

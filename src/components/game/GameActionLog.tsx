@@ -17,6 +17,12 @@ const ACTION_COLORS: Record<string, string> = {
   message: 'text-cream',
   life_change: 'text-green-300',
   tap_all: 'text-cream-muted',
+  counter_change: 'text-blue-300',
+  poison_change: 'text-purple-400',
+  dice_roll: 'text-amber-300',
+  reveal: 'text-yellow-300',
+  turn_pass: 'text-orange-400',
+  targeting: 'text-red-300',
 };
 
 function formatTime(iso: string): string {

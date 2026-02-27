@@ -154,6 +154,8 @@ export function createSandboxGame(options: SandboxOptions = {}): {
     cards,
     players,
     actionLog: [],
+    turnOrder: shuffle(Object.keys(players)),
+    activePlayerIndex: 0,
   };
 
   return { room, playerId: myPlayerId };

@@ -72,6 +72,7 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       return {
         ...room,
         cards: { ...room.cards, [delta.instanceId]: { ...card, counters: delta.counters } },
+        actionLog: appendLog(room.actionLog, delta.log),
       };
     }
 
@@ -94,6 +95,7 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
           ...room.players,
           [delta.playerId]: { ...player, poisonCounters: delta.poisonCounters },
         },
+        actionLog: appendLog(room.actionLog, delta.log),
       };
     }
 
@@ -167,7 +169,8 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
     case 'library_shuffled':
     case 'scry_resolved':
     case 'player_conceded':
-    case 'message': {
+    case 'message':
+    case 'cards_revealed': {
       return { ...room, actionLog: appendLog(room.actionLog, delta.log) };
     }
 
@@ -217,6 +220,14 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       return {
         ...room,
         cards: { ...room.cards, [card.instanceId]: card },
+        actionLog: appendLog(room.actionLog, delta.log),
+      };
+    }
+
+    case 'turn_passed': {
+      return {
+        ...room,
+        activePlayerIndex: delta.activePlayerIndex,
         actionLog: appendLog(room.actionLog, delta.log),
       };
     }

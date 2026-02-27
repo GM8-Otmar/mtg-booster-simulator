@@ -33,7 +33,10 @@ export default function BattlefieldZone({
   label,
   heightClass = 'flex-1 min-h-0',
 }: BattlefieldZoneProps) {
-  const { tapCard, changeZone, moveCard, playerId } = useGameTable();
+  const {
+    tapCard, changeZone, moveCard, playerId,
+    targetingArrows, isTargetingMode, cancelTargeting, dismissArrow,
+  } = useGameTable();
   const containerRef = useRef<HTMLDivElement>(null);
 
   // ── Selection state ──────────────────────────────────────────────────────
@@ -47,6 +50,10 @@ export default function BattlefieldZone({
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   const selectedIdsRef = useRef(selectedIds);
   useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
+  const tapCardRef = useRef(tapCard);
+  useEffect(() => { tapCardRef.current = tapCard; }, [tapCard]);
+  const playerIdRef = useRef(playerId);
+  useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
 
   // ── Multi-drag state ─────────────────────────────────────────────────────
   const [multiDrag, setMultiDrag] = useState<MultiDragState | null>(null);
@@ -54,10 +61,42 @@ export default function BattlefieldZone({
   const multiDragRef = useRef<MultiDragState | null>(null);
   const multiDragPositionsRef = useRef<MultiDragPositions>(new Map());
 
-  // ── Escape clears selection ──────────────────────────────────────────────
+  // Refs for targeting so the keydown handler stays stable
+  const isTargetingModeRef = useRef(isTargetingMode);
+  useEffect(() => { isTargetingModeRef.current = isTargetingMode; }, [isTargetingMode]);
+  const cancelTargetingRef = useRef(cancelTargeting);
+  useEffect(() => { cancelTargetingRef.current = cancelTargeting; }, [cancelTargeting]);
+
+  // ── Escape clears selection (or cancels targeting); Space taps/untaps selected
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedIds(new Set());
+      if (e.key === 'Escape') {
+        if (isTargetingModeRef.current) {
+          cancelTargetingRef.current();
+        } else {
+          setSelectedIds(new Set());
+        }
+        return;
+      }
+      if (e.key === ' ') {
+        // Skip if focused on a text input
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        const sel = selectedIdsRef.current;
+        if (sel.size === 0) return;
+        e.preventDefault();
+        const pid = playerIdRef.current;
+        const selectedCards = cardsRef.current.filter(
+          c => sel.has(c.instanceId) && c.controller === pid,
+        );
+        if (selectedCards.length === 0) return;
+        // If any selected card is untapped → tap all; else untap all
+        const anyUntapped = selectedCards.some(c => !c.tapped);
+        const targetTapped = anyUntapped;
+        for (const c of selectedCards) {
+          tapCardRef.current(c.instanceId, targetTapped);
+        }
+      }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
@@ -342,6 +381,63 @@ export default function BattlefieldZone({
               ✕
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── Targeting arrows SVG overlay ──────────────────────────────── */}
+      {targetingArrows.length > 0 && (
+        <svg className="absolute inset-0 z-[100] pointer-events-none" style={{ width: '100%', height: '100%' }}>
+          <defs>
+            <marker
+              id="arrow-tip"
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 Z" fill="rgba(239, 68, 68, 0.85)" />
+            </marker>
+          </defs>
+          {targetingArrows.map(arrow => {
+            const fromCard = cards.find(c => c.instanceId === arrow.fromId);
+            const toCard = cards.find(c => c.instanceId === arrow.toId);
+            if (!fromCard || !toCard) return null;
+            return (
+              <line
+                key={arrow.id}
+                x1={`${fromCard.x}%`}
+                y1={`${fromCard.y}%`}
+                x2={`${toCard.x}%`}
+                y2={`${toCard.y}%`}
+                stroke="rgba(239, 68, 68, 0.7)"
+                strokeWidth="3"
+                strokeLinecap="round"
+                markerEnd="url(#arrow-tip)"
+                style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                onClick={() => dismissArrow(arrow.id)}
+              />
+            );
+          })}
+        </svg>
+      )}
+
+      {/* ── Targeting mode indicator bar ──────────────────────────────── */}
+      {isTargetingMode && (
+        <div
+          className="absolute bottom-0 inset-x-0 z-[300] flex items-center justify-center gap-3 py-2 bg-red-900/80 border-t border-red-500/50 pointer-events-auto"
+          onPointerDown={e => e.stopPropagation()}
+        >
+          <span className="text-red-200 text-xs font-semibold animate-pulse">
+            Click a target card or player…
+          </span>
+          <button
+            onClick={cancelTargeting}
+            className="text-[11px] px-3 py-1 rounded-lg bg-red-800 hover:bg-red-700 border border-red-500/60 text-red-200 font-semibold transition-all"
+          >
+            Cancel
+          </button>
         </div>
       )}
 

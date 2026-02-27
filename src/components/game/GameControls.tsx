@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useGameTable } from '../../contexts/GameTableContext';
 import DeckImportModal from './DeckImportModal';
 import TokenCreatorModal from './TokenCreatorModal';
+import DiceRollerModal from './DiceRollerModal';
 import type { TokenTemplate } from '../../types/game';
 
 interface GameControlsProps {
@@ -30,6 +31,7 @@ export default function GameControls({ onConcede }: GameControlsProps) {
   const [showImport, setShowImport] = useState(false);
   const [showTokens, setShowTokens] = useState(false);
   const [showTokenCreator, setShowTokenCreator] = useState(false);
+  const [showDiceRoller, setShowDiceRoller] = useState(false);
   const [showConfirmConcede, setShowConfirmConcede] = useState(false);
   const [chatText, setChatText] = useState('');
 
@@ -84,6 +86,12 @@ export default function GameControls({ onConcede }: GameControlsProps) {
           className="py-1.5 text-xs font-semibold bg-navy-light hover:bg-navy border border-cyan-dim rounded-lg text-cream-muted transition-all"
         >
           Shuffle
+        </button>
+        <button
+          onClick={() => setShowDiceRoller(true)}
+          className="py-1.5 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 rounded-lg text-amber-300 transition-all"
+        >
+          🎲 Roll Dice
         </button>
         <button
           onClick={() => mulligan(7)}
@@ -178,6 +186,7 @@ export default function GameControls({ onConcede }: GameControlsProps) {
 
       {showImport && <DeckImportModal onClose={() => setShowImport(false)} />}
       {showTokenCreator && <TokenCreatorModal onClose={() => setShowTokenCreator(false)} />}
+      {showDiceRoller && <DiceRollerModal onClose={() => setShowDiceRoller(false)} />}
     </div>
   );
 }
