@@ -25,7 +25,7 @@ interface MenuItem {
 
 export default function CardContextMenu({ card, x, y, onClose, selectedCards }: CardContextMenuProps) {
   const {
-    changeZone, bulkChangeZone, tapCard, setFaceDown,
+    changeZone, bulkChangeZone, tapCard, bulkTapCards, setFaceDown,
     addCounter, bulkAddCounter, resetCounters, notifyCommanderCast,
     createToken, revealCards, startTargeting, effectivePlayerId: playerId,
   } = useGameTable();
@@ -75,15 +75,18 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
     const onBattlefield = targets.some(c => c.zone === 'battlefield');
 
     if (onBattlefield) {
+      const ownedBattlefieldIds = targets
+        .filter(c => c.zone === 'battlefield' && c.controller === playerId)
+        .map(c => c.instanceId);
       sections.push({
         items: [
           {
             label: 'Tap all',
-            action: () => doAll(c => { if (c.zone === 'battlefield') tapCard(c.instanceId, true); }),
+            action: () => do_(() => bulkTapCards(ownedBattlefieldIds, true)),
           },
           {
             label: 'Untap all',
-            action: () => doAll(c => { if (c.zone === 'battlefield') tapCard(c.instanceId, false); }),
+            action: () => do_(() => bulkTapCards(ownedBattlefieldIds, false)),
           },
         ],
       });
