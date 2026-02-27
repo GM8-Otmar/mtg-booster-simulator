@@ -51,6 +51,14 @@ npm run dev
 
 Then open `http://localhost:5173` in your browser.
 
+### Development (Single Command)
+
+Run both frontend and backend together:
+
+```bash
+npm run dev:full
+```
+
 ### Share with Friends
 
 **Same WiFi (Local Network):**
@@ -72,7 +80,7 @@ For friends NOT on your WiFi, use ngrok:
 ngrok http 5173
 ```
 
-Share the ngrok URL (e.g., `https://abc-xyz.ngrok-free.app`)
+Share the ngrok URL (e.g., `https://abc-xyz.ngrok-free.dev`)
 
 📖 **[Full Remote Setup Guide](docs/REMOTE-SETUP.md)** - Step-by-step instructions for playing with remote friends
 
@@ -157,6 +165,7 @@ kitchen-table-magic/
 # Development
 npm run dev              # Start frontend dev server
 npm run dev:server       # Start backend dev server
+npm run dev:full         # Start both via concurrently
 
 # Production Build
 npm run build            # Build frontend
@@ -190,8 +199,14 @@ PORT=3001
 ### Backend Settings
 
 - **Event Cleanup**: Old events auto-delete after 24 hours
-- **Storage**: Events saved to `./data/events/`
+- **Storage**: Events saved to `./data/events/`; game table state is saved to `./data/games/`
 - **WebSocket**: Real-time updates for multiplayer
+
+### Game Table Multiplayer Notes
+
+- Sandbox and multiplayer now share the same bulk interaction model for multi-select tap, zone moves, and counters.
+- Multiplayer bulk actions are processed atomically (`cards:tap`, `cards:zone`, `cards:counter`) to reduce race conditions from per-card emits.
+- Game code lookup skips malformed JSON files in `data/games` instead of failing the whole scan.
 
 ## 📝 Data Persistence
 

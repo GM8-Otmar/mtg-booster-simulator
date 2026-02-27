@@ -1,6 +1,28 @@
 # MTG Booster Simulator — Opus Handoff Summary
 
-**Date:** 2025-02-27
+**Date:** 2026-02-27
+
+## Addendum (Latest Session)
+
+### Multiplayer parity with sandbox bulk interactions
+
+- Added atomic multiplayer bulk events for selected-card actions:
+  - `cards:tap`
+  - `cards:zone`
+  - `cards:counter`
+- Wired UI multi-select interactions to these bulk paths so sandbox and multiplayer behavior are aligned for:
+  - double-click selected tap/untap
+  - marquee multi-card zone moves
+  - bulk counter adjustments
+
+### Server-side ownership hardening
+
+- Added ownership checks on multiplayer handlers for single-card mutations (`card:tap`, `card:zone`, `card:counter`) to prevent off-controller state updates.
+
+### Game code lookup reliability fix
+
+- `loadGameByCode()` now skips malformed files in `data/games` instead of aborting the entire scan.
+- This prevents valid room codes from incorrectly returning `404` when one bad JSON file exists.
 
 ## Issues Fixed This Session
 

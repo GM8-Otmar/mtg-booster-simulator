@@ -63,14 +63,14 @@ npm run dev
 
 ### Terminal 3: ngrok Tunnel
 ```bash
-ngrok http 5173
+npx ngrok http 5173 --log=stdout
 ```
 
 **Expected output:**
 ```
 Session Status                online
 Account                       your@email.com (Plan: Free)
-Forwarding                    https://abc-xyz-123.ngrok-free.app -> http://localhost:5173
+Forwarding                    https://abc-xyz-123.ngrok-free.dev -> http://localhost:5173
 
 Web Interface                 http://127.0.0.1:4040
 ```
@@ -79,7 +79,7 @@ Web Interface                 http://127.0.0.1:4040
 
 ## Step 3: Share the URL
 
-Copy the **Forwarding** URL from the ngrok terminal (e.g., `https://abc-xyz-123.ngrok-free.app`)
+Copy the **Forwarding** URL from the ngrok terminal (e.g., `https://abc-xyz-123.ngrok-free.dev`)
 
 **Share this URL with your friend!**
 
@@ -106,7 +106,7 @@ Copy the **Forwarding** URL from the ngrok terminal (e.g., `https://abc-xyz-123.
 8. Open packs and play!
 
 ### Your Friend:
-1. Visit the ngrok URL you shared (e.g., `https://abc-xyz-123.ngrok-free.app`)
+1. Visit the ngrok URL you shared (e.g., `https://abc-xyz-123.ngrok-free.dev`)
 2. Click "Visit Site" on ngrok warning
 3. Select "Sealed Event Mode"
 4. Click "Join Event"
@@ -137,6 +137,12 @@ Copy the **Forwarding** URL from the ngrok terminal (e.g., `https://abc-xyz-123.
 - Make sure all 3 terminals are running (backend, frontend, ngrok)
 - Check that ngrok shows "Session Status: online"
 
+### "This site can't provide a secure connection" / `ERR_SSL_PROTOCOL_ERROR`
+- Confirm you shared the exact current ngrok URL (free URLs change each restart).
+- Ensure the URL is `https://...ngrok-free.dev` (not an old `.app` URL).
+- If you restarted frontend/backend, wait a few seconds for ngrok to reconnect private legs.
+- Ask the friend to try incognito or a different network (some VPNs/proxies/AV tools break TLS interception).
+
 ### "403 Forbidden" or CORS errors
 - Restart the Vite dev server (Terminal 2) after starting ngrok
 - Make sure `.env` file has `VITE_API_URL=` (empty)
@@ -165,7 +171,7 @@ npm run dev:server
 npm run dev
 
 # Terminal 3: ngrok
-ngrok http 5173
+npx ngrok http 5173 --log=stdout
 ```
 
 **Stop everything**: Press `Ctrl+C` in each terminal
@@ -195,7 +201,7 @@ This is **faster** and **easier** if everyone is on the same network.
 **ngrok Paid Plan ($8/month):**
 ```bash
 # After upgrading, reserve a custom domain in dashboard
-ngrok http 5173 --domain=your-custom-name.ngrok.app
+npx ngrok http 5173 --domain=your-custom-name.ngrok.app
 ```
 
 Your URL will always be `https://your-custom-name.ngrok.app` - no more sharing new URLs!
