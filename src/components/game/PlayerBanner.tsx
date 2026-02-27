@@ -9,11 +9,46 @@ import { useGameTable } from '../../contexts/GameTableContext';
 interface PlayerBannerProps {
   player: GamePlayerState;
   isCurrentPlayer?: boolean;
+  /** Single-line strip for grid cells — shows name, life, hand, library only */
+  compact?: boolean;
 }
 
-export default function PlayerBanner({ player, isCurrentPlayer = false }: PlayerBannerProps) {
+export default function PlayerBanner({ player, isCurrentPlayer = false, compact = false }: PlayerBannerProps) {
   const { room, isTargetingMode, completeTargeting } = useGameTable();
   if (!room) return null;
+
+  /* ── Compact single-line banner for 2x2 grid cells ────────────────────── */
+  if (compact) {
+    return (
+      <div className="flex items-center gap-3 px-3 py-1.5 bg-navy-light/60 border-b border-cyan-dim/30 shrink-0">
+        <span className={`text-xs font-bold truncate ${isCurrentPlayer ? 'text-cyan' : 'text-cream'}`}>
+          {player.playerName}
+          {isCurrentPlayer && <span className="text-cream-muted font-normal ml-1">(you)</span>}
+        </span>
+        <span className="text-xs text-cream-muted ml-auto flex items-center gap-3">
+          <span title="Life">
+            <span className="text-red-400">{'\u2764'}</span> <span className="font-bold text-cream">{player.life}</span>
+          </span>
+          {player.poisonCounters > 0 && (
+            <span title="Poison">
+              <span className="text-green-400">{'\u2620'}</span> <span className="font-bold text-green-300">{player.poisonCounters}</span>
+            </span>
+          )}
+          <span title="Hand">
+            <span className="opacity-60">{'\uD83C\uDCCF'}</span> {player.handCardIds.length}
+          </span>
+          <span title="Library">
+            <span className="opacity-60">{'\uD83D\uDCDA'}</span> {player.libraryCardIds.length}
+          </span>
+          <span title="Graveyard">
+            <span className="opacity-60">{'\uD83D\uDDD1'}</span> {player.graveyardCardIds.length}
+          </span>
+        </span>
+      </div>
+    );
+  }
+
+  /* ── Full banner (sidebar HUD) ────────────────────────────────────────── */
 
   const graveyardCards = player.graveyardCardIds
     .map(id => room.cards[id])

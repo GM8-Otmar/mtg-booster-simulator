@@ -224,6 +224,17 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       };
     }
 
+    case 'player_joined':
+    case 'player_connected': {
+      if (!delta.player) return room;
+      const newCards = delta.cards ? { ...room.cards, ...delta.cards } : room.cards;
+      return {
+        ...room,
+        players: { ...room.players, [delta.player.playerId]: delta.player },
+        cards: newCards,
+      };
+    }
+
     case 'turn_passed': {
       return {
         ...room,
@@ -231,8 +242,6 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
         actionLog: appendLog(room.actionLog, delta.log),
       };
     }
-
-    case 'player_connected':
     default:
       return room;
   }

@@ -22,11 +22,12 @@ export default function GameTablePage() {
     untapAll, drawCards, mulligan,
     concede, connected, gameRoomId, isSandbox,
     activeSandboxPlayerId, setActiveSandboxPlayer,
-    passTurn, activePlayerId, isMyTurn,
+    passTurn, isMyTurn,
   } = useGameTable();
 
   const [atTable, setAtTable] = useState(false);
   const [showImportAfterJoin, setShowImportAfterJoin] = useState(false);
+  const [showHUD, setShowHUD] = useState(true);
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -98,6 +99,7 @@ export default function GameTablePage() {
   const effectiveMyId = isSandbox ? (activeSandboxPlayerId ?? playerId) : playerId;
   const opponents = allPlayers.filter(p => p.playerId !== effectiveMyId);
   const myBfCards: BattlefieldCard[] = myBattlefieldCards;
+  const useGrid = opponents.length >= 3;
 
   const handleConcede = () => {
     concede();
@@ -132,7 +134,6 @@ export default function GameTablePage() {
             </span>
           ))}
         </div>
-
         {/* Zone count HUD — center of top bar */}
         <div className="flex-1 flex justify-center items-center gap-3">
           <ZoneCountHUD />
@@ -162,6 +163,18 @@ export default function GameTablePage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {/* HUD toggle */}
+          <button
+            onClick={() => setShowHUD(h => !h)}
+            className={`text-xs px-2 py-1 rounded border transition-all ${
+              showHUD
+                ? 'border-cyan text-cyan bg-cyan/10'
+                : 'border-cyan-dim/40 text-cream-muted hover:text-cream hover:border-cyan-dim'
+            }`}
+            title={showHUD ? 'Hide player HUD' : 'Show player HUD'}
+          >
+            {showHUD ? 'HUD ✓' : 'HUD'}
+          </button>
           {isSandbox ? (
             <span className="text-yellow-400/60 text-xs">offline · local only</span>
           ) : (
@@ -189,67 +202,166 @@ export default function GameTablePage() {
           </div>
         </div>
 
-        {/* ── Center: opponents + my battlefield + my hand ──────────────── */}
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
+        {/* ── Center ──────────────────────────────────────────────────── */}
+        {useGrid ? (
+          /* ── 2x2 Grid mode (3+ opponents) ─────────────────────────── */
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
+            {/* Sandbox multi-player tabs */}
+            {showSandboxTabs && (
+              <div className="shrink-0 flex gap-0 border-b border-cyan-dim/30 bg-navy/80 px-2 pt-1">
+                {allPlayers.map(p => {
+                  const isActive = p.playerId === effectiveMyId;
+                  const isYou = p.playerId === playerId;
+                  return (
+                    <button
+                      key={p.playerId}
+                      onClick={() => setActiveSandboxPlayer(p.playerId)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg mr-0.5 transition-all border-t border-l border-r ${
+                        isActive
+                          ? 'bg-navy border-cyan-dim/50 text-cyan'
+                          : 'bg-navy-light/50 border-cyan-dim/20 text-cream-muted hover:text-cream hover:bg-navy-light'
+                      }`}
+                    >
+                      {p.playerName}
+                      {isYou && <span className="ml-1 text-[9px] opacity-50">(you)</span>}
+                      <span className="ml-1.5 text-[9px] opacity-60">{p.life}♥</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div
+              className="flex-1 min-w-0 min-h-0"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gridTemplateRows: '1fr 1fr',
+                gap: '2px',
+              }}
+            >
+            {/* Top-left: Opponent 1 */}
+            {opponents[0] && (
+              <div className="overflow-hidden border-b border-r border-cyan-dim/20 bg-navy/40">
+                <OpponentView player={opponents[0]} fillHeight />
+              </div>
+            )}
 
-          {/* Sandbox multi-player tabs */}
-          {showSandboxTabs && (
-            <div className="shrink-0 flex gap-0 border-b border-cyan-dim/30 bg-navy/80 px-2 pt-1">
-              {allPlayers.map(p => {
-                const isActive = p.playerId === effectiveMyId;
-                const isYou = p.playerId === playerId;
-                return (
-                  <button
-                    key={p.playerId}
-                    onClick={() => setActiveSandboxPlayer(p.playerId)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg mr-0.5 transition-all border-t border-l border-r ${
-                      isActive
-                        ? 'bg-navy border-cyan-dim/50 text-cyan'
-                        : 'bg-navy-light/50 border-cyan-dim/20 text-cream-muted hover:text-cream hover:bg-navy-light'
-                    }`}
-                  >
-                    {p.playerName}
-                    {isYou && <span className="ml-1 text-[9px] opacity-50">(you)</span>}
-                    <span className="ml-1.5 text-[9px] opacity-60">{p.life}♥</span>
-                  </button>
-                );
-              })}
+            {/* Top-right: Opponent 2 */}
+            {opponents[1] && (
+              <div className="overflow-hidden border-b border-cyan-dim/20 bg-navy/40">
+                <OpponentView player={opponents[1]} fillHeight />
+              </div>
+            )}
+
+            {/* Bottom-left: Opponent 3 */}
+            {opponents[2] && (
+              <div className="overflow-hidden border-r border-cyan-dim/20 bg-navy/40">
+                <OpponentView player={opponents[2]} fillHeight />
+              </div>
+            )}
+
+            {/* Bottom-right: Me (banner + battlefield + hand) */}
+            {myPlayer && (
+              <div className="flex flex-col min-h-0 overflow-hidden">
+                <PlayerBanner player={myPlayer} isCurrentPlayer compact />
+                <div className="flex-1 min-h-0 p-1 overflow-hidden flex flex-col">
+                  <BattlefieldZone
+                    cards={myBfCards}
+                    label={myPlayer.playerName ? `${myPlayer.playerName}'s Battlefield` : 'Your Battlefield'}
+                  />
+                </div>
+                <div className="shrink-0 h-28 border-t border-cyan-dim/30 bg-navy/70 px-2">
+                  <HandZone cards={myHandCards} />
+                </div>
+              </div>
+            )}
             </div>
-          )}
-
-          {/* Opponents section */}
-          {opponents.length > 0 && (
-            <div className="shrink-0 border-b border-cyan-dim/30 bg-navy/50 overflow-y-auto" style={{ maxHeight: '40%' }}>
-              {opponents.map(opp => (
-                <OpponentView key={opp.playerId} player={opp} />
-              ))}
-            </div>
-          )}
-
-          {/* My battlefield */}
-          <div className="flex-1 p-2 overflow-hidden min-h-0 flex flex-col">
-            <BattlefieldZone
-              cards={myBfCards}
-              label={myPlayer?.playerName ? `${myPlayer.playerName}'s Battlefield` : 'Your Battlefield'}
-            />
           </div>
+        ) : (
+          /* ── Classic stacked mode (0-2 opponents) ─────────────────── */
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
+            {/* Sandbox multi-player tabs */}
+            {showSandboxTabs && (
+              <div className="shrink-0 flex gap-0 border-b border-cyan-dim/30 bg-navy/80 px-2 pt-1">
+                {allPlayers.map(p => {
+                  const isActive = p.playerId === effectiveMyId;
+                  const isYou = p.playerId === playerId;
+                  return (
+                    <button
+                      key={p.playerId}
+                      onClick={() => setActiveSandboxPlayer(p.playerId)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg mr-0.5 transition-all border-t border-l border-r ${
+                        isActive
+                          ? 'bg-navy border-cyan-dim/50 text-cyan'
+                          : 'bg-navy-light/50 border-cyan-dim/20 text-cream-muted hover:text-cream hover:bg-navy-light'
+                      }`}
+                    >
+                      {p.playerName}
+                      {isYou && <span className="ml-1 text-[9px] opacity-50">(you)</span>}
+                      <span className="ml-1.5 text-[9px] opacity-60">{p.life}♥</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
-          {/* My hand */}
-          {myPlayer && (
-            <div className="shrink-0 h-36 border-t border-cyan-dim/30 bg-navy/70 px-4">
-              <HandZone cards={myHandCards} />
+            {/* Opponents section */}
+            {opponents.length > 0 && (
+              <div className="shrink-0 border-b border-cyan-dim/30 bg-navy/50 overflow-y-auto" style={{ maxHeight: '40%' }}>
+                {opponents.map(opp => (
+                  <OpponentView key={opp.playerId} player={opp} />
+                ))}
+              </div>
+            )}
+
+            {/* My battlefield */}
+            <div className="flex-1 p-2 overflow-hidden min-h-0 flex flex-col">
+              <BattlefieldZone
+                cards={myBfCards}
+                label={myPlayer?.playerName ? `${myPlayer.playerName}'s Battlefield` : 'Your Battlefield'}
+              />
             </div>
-          )}
-        </div>
 
-        {/* ── Right sidebar: player HUD + card inspector ────────────────── */}
-        {myPlayer && (
+            {/* My hand */}
+            {myPlayer && (
+              <div className="shrink-0 h-36 border-t border-cyan-dim/30 bg-navy/70 px-4">
+                <HandZone cards={myHandCards} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Right sidebar: player HUD + card inspector ──────────────── */}
+        {/* In grid mode: collapsible overlay. Classic mode: inline sidebar. */}
+        {myPlayer && !useGrid && showHUD && (
           <div className="w-72 shrink-0 border-l border-cyan-dim/30 bg-navy flex flex-col overflow-hidden">
             {/* Player HUD — fixed height */}
             <div className="shrink-0 overflow-y-auto border-b border-cyan-dim/20" style={{ maxHeight: '55%' }}>
               <PlayerBanner player={myPlayer} isCurrentPlayer />
             </div>
             {/* Card inspector — fills remaining space */}
+            <div className="flex-1 overflow-y-auto border-t border-cyan-dim/10">
+              <p className="text-[9px] uppercase tracking-widest text-cream-muted/30 px-3 pt-2 pb-1">Inspector</p>
+              <CardInspectorPanel />
+            </div>
+          </div>
+        )}
+
+        {/* Grid mode: floating HUD overlay */}
+        {myPlayer && useGrid && showHUD && (
+          <div className="fixed top-12 right-2 z-50 w-72 max-h-[80vh] bg-navy border border-cyan-dim/50 rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-1.5 bg-navy-light border-b border-cyan-dim/30">
+              <span className="text-xs font-bold text-cyan">Player HUD</span>
+              <button
+                onClick={() => setShowHUD(false)}
+                className="text-cream-muted/60 hover:text-cream text-sm px-1"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto" style={{ maxHeight: '50%' }}>
+              <PlayerBanner player={myPlayer} isCurrentPlayer />
+            </div>
             <div className="flex-1 overflow-y-auto border-t border-cyan-dim/10">
               <p className="text-[9px] uppercase tracking-widest text-cream-muted/30 px-3 pt-2 pb-1">Inspector</p>
               <CardInspectorPanel />

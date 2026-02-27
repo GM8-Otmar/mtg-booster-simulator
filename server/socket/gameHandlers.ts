@@ -29,11 +29,16 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     socket.join(ROOM(gameRoomId));
     // full sanitised state to this socket only
     socket.emit('game:state', gameService.sanitiseForPlayer(room, playerId));
-    // notify others
+    // notify others — send full player state so they can render the new opponent
+    const joiningPlayer = room.players[playerId]!;
+    const joiningCards: Record<string, typeof room.cards[string]> = {};
+    for (const [cid, card] of Object.entries(room.cards)) {
+      if (card.controller === playerId) joiningCards[cid] = card;
+    }
     socket.to(ROOM(gameRoomId)).emit('game:delta', {
-      type: 'player_connected',
-      playerId,
-      playerName: room.players[playerId]!.playerName,
+      type: 'player_joined',
+      player: joiningPlayer,
+      cards: joiningCards,
     });
   });
 
