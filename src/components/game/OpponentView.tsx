@@ -5,9 +5,11 @@ import PlayerBanner from './PlayerBanner';
 
 interface OpponentViewProps {
   player: GamePlayerState;
+  /** Grid cell mode — fill the entire cell height */
+  fillHeight?: boolean;
 }
 
-export default function OpponentView({ player }: OpponentViewProps) {
+export default function OpponentView({ player, fillHeight = false }: OpponentViewProps) {
   const { room } = useGameTable();
   if (!room) return null;
 
@@ -15,17 +17,17 @@ export default function OpponentView({ player }: OpponentViewProps) {
     (c): c is BattlefieldCard => c.zone === 'battlefield' && c.controller === player.playerId,
   );
 
+  // Always compact strip + battlefield. Never the full HUD.
   return (
-    <div className="flex flex-col gap-2">
-      {/* Compact banner */}
-      <PlayerBanner player={player} isCurrentPlayer={false} />
+    <div className={fillHeight ? 'flex flex-col min-h-0 h-full overflow-hidden' : 'flex flex-col min-h-0 overflow-hidden'}>
+      <PlayerBanner player={player} isCurrentPlayer={false} compact />
 
-      {/* Opponent battlefield (smaller) */}
-      <BattlefieldZone
-        cards={battlefieldCards}
-        label={`${player.playerName}'s Battlefield`}
-        heightClass="h-40"
-      />
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <BattlefieldZone
+          cards={battlefieldCards}
+          label={`${player.playerName}'s Battlefield`}
+        />
+      </div>
     </div>
   );
 }

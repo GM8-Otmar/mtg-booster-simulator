@@ -220,7 +220,17 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       };
     }
 
-    case 'player_connected':
+    case 'player_joined':
+    case 'player_connected': {
+      if (!delta.player) return room;
+      const newCards = delta.cards ? { ...room.cards, ...delta.cards } : room.cards;
+      return {
+        ...room,
+        players: { ...room.players, [delta.player.playerId]: delta.player },
+        cards: newCards,
+      };
+    }
+
     default:
       return room;
   }
