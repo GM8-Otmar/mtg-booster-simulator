@@ -37,7 +37,7 @@ export default function BattlefieldZone({
   isOwnBattlefield = false,
 }: BattlefieldZoneProps) {
   const {
-    tapCard, changeZone, moveCard, effectivePlayerId: playerId,
+    bulkTapCards, bulkChangeZone, moveCard, effectivePlayerId: playerId,
     targetingArrows, isTargetingMode, cancelTargeting, dismissArrow,
     shakeCards,
   } = useGameTable();
@@ -54,8 +54,8 @@ export default function BattlefieldZone({
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   const selectedIdsRef = useRef(selectedIds);
   useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
-  const tapCardRef = useRef(tapCard);
-  useEffect(() => { tapCardRef.current = tapCard; }, [tapCard]);
+  const bulkTapCardsRef = useRef(bulkTapCards);
+  useEffect(() => { bulkTapCardsRef.current = bulkTapCards; }, [bulkTapCards]);
   const playerIdRef = useRef(playerId);
   useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
 
@@ -99,10 +99,7 @@ export default function BattlefieldZone({
         if (selectedCards.length === 0) return;
         // If any selected card is untapped → tap all; else untap all
         const anyUntapped = selectedCards.some(c => !c.tapped);
-        const targetTapped = anyUntapped;
-        for (const c of selectedCards) {
-          tapCardRef.current(c.instanceId, targetTapped);
-        }
+        bulkTapCardsRef.current(selectedCards.map(c => c.instanceId), anyUntapped);
       } else if (e.key === 'h') {
         const sel = selectedIdsRef.current;
         if (sel.size === 0) return;
@@ -257,9 +254,7 @@ export default function BattlefieldZone({
       if (zoneEl) {
         // Send all selected to the drop zone; library always goes on top
         const dropZone = zoneEl.dataset.dropZone as GameZone;
-        for (const id of drag.startPositions.keys()) {
-          changeZone(id, dropZone, dropZone === 'library' ? 0 : undefined);
-        }
+        bulkChangeZone([...drag.startPositions.keys()], dropZone, dropZone === 'library' ? 0 : undefined);
       } else {
         // Persist final positions for all selected cards
         for (const [id, pos] of multiDragPositionsRef.current) {
@@ -281,17 +276,16 @@ export default function BattlefieldZone({
       window.removeEventListener('pointerup', onUp);
       clearZoneHighlights();
     };
-  }, [multiDrag, changeZone, moveCard]);
+  }, [multiDrag, bulkChangeZone, moveCard]);
 
   // ── Bulk tap actions ─────────────────────────────────────────────────────
   const tapSelected = useCallback((tapped: boolean) => {
-    for (const card of cardsRef.current) {
-      if (selectedIds.has(card.instanceId) && card.controller === playerId) {
-        tapCard(card.instanceId, tapped);
-      }
-    }
+    const ownedIds = cardsRef.current
+      .filter(card => selectedIds.has(card.instanceId) && card.controller === playerId)
+      .map(card => card.instanceId);
+    bulkTapCards(ownedIds, tapped);
     setSelectedIds(new Set());
-  }, [selectedIds, playerId, tapCard]);
+  }, [selectedIds, playerId, bulkTapCards]);
 
   // Click-to-select: replace selection with just this card (multi-select only via marquee)
   const onSelectCard = useCallback((instanceId: string) => {

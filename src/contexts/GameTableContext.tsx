@@ -65,6 +65,7 @@ export interface GameTableContextType {
   /** Move multiple cards to a zone at once (avoids batching issues) */
   bulkChangeZone: (instanceIds: string[], toZone: GameZone, toIndex?: number) => void;
   tapCard: (instanceId: string, tapped: boolean) => void;
+  bulkTapCards: (instanceIds: string[], tapped: boolean) => void;
   tapAll: (filter?: 'all' | 'lands') => void;
   untapAll: () => void;
   setFaceDown: (instanceId: string, faceDown: boolean) => void;
@@ -529,15 +530,40 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
         return current;
       });
     } else {
-      for (const id of instanceIds) {
-        emit('card:zone', { instanceId: id, toZone, toIndex });
-      }
+      emit('cards:zone', { instanceIds, toZone, toIndex });
     }
   }, [emit, saveUndoSnapshot]);
 
   const tapCard = useCallback((instanceId: string, tapped: boolean) => {
     saveUndoSnapshot();
     emit('card:tap', { instanceId, tapped });
+  }, [emit, saveUndoSnapshot]);
+
+  const bulkTapCards = useCallback((instanceIds: string[], tapped: boolean) => {
+    if (instanceIds.length === 0) return;
+    saveUndoSnapshot();
+    if (isSandboxRef.current) {
+      const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+      const roomId = gameRoomIdRef.current;
+      if (!activePid || !roomId) return;
+      setRoom(prev => {
+        if (!prev) return prev;
+        let current = prev;
+        for (const id of instanceIds) {
+          const card = current.cards[id];
+          if (!card || card.zone !== 'battlefield' || card.controller !== activePid) continue;
+          current = applyLocalSandboxAction(current, 'card:tap', {
+            gameRoomId: roomId,
+            playerId: activePid,
+            instanceId: id,
+            tapped,
+          }, activePid);
+        }
+        return current;
+      });
+      return;
+    }
+    emit('cards:tap', { instanceIds, tapped });
   }, [emit, saveUndoSnapshot]);
 
   const tapAll = useCallback((filter: 'all' | 'lands' = 'all') => {
@@ -596,9 +622,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
         return current;
       });
     } else {
-      for (const id of instanceIds) {
-        emit('card:counter', { instanceId: id, counterType, delta, label });
-      }
+      emit('cards:counter', { instanceIds, counterType, delta, label });
     }
   }, [emit, saveUndoSnapshot]);
 
@@ -855,7 +879,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       myGraveyardCards, myExileCards, myCommandZoneCards,
       createGame, joinGame, importDeck, leaveGame, loadSandbox, isSandbox,
       activeSandboxPlayerId, setActiveSandboxPlayer,
-      moveCard, changeZone, bulkChangeZone, tapCard, tapAll, untapAll, setFaceDown, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
+      moveCard, changeZone, bulkChangeZone, tapCard, bulkTapCards, tapAll, untapAll, setFaceDown, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
       adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast,
       drawCards, shuffleLibrary, scry, resolveScry, mulligan,
       createToken,

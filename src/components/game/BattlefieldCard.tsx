@@ -35,7 +35,7 @@ export default function BattlefieldCard({
   multiDragPos,
   isMultiDragLead,
 }: BattlefieldCardProps) {
-  const { moveCard, tapCard, changeZone, addCounter, effectivePlayerId: playerId, isTargetingMode, completeTargeting, shakingCardIds } = useGameTable();
+  const { moveCard, tapCard, bulkTapCards, changeZone, addCounter, effectivePlayerId: playerId, isTargetingMode, completeTargeting, shakingCardIds } = useGameTable();
   const { inspect } = useCardInspector();
 
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -227,11 +227,11 @@ export default function BattlefieldCard({
       const owned = selectedCards.filter(c => c.controller === playerId);
       if (owned.length === 0) return;
       const anyUntapped = owned.some(c => !c.tapped);
-      for (const c of owned) tapCard(c.instanceId, anyUntapped);
+      bulkTapCards(owned.map(c => c.instanceId), anyUntapped);
     } else {
       tapCard(card.instanceId, !card.tapped);
     }
-  }, [card.instanceId, card.tapped, isOwner, tapCard, isSelected, selectedCards, playerId]);
+  }, [card.instanceId, card.tapped, isOwner, tapCard, bulkTapCards, isSelected, selectedCards, playerId]);
 
   // ── Right-click: context menu ────────────────────────────────────────────
 

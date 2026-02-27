@@ -87,6 +87,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
 
     const player = room.players[card.controller];
     if (!player) { console.log(`[MTG-SERVER] card:zone — controller not found (${card.controller?.slice(0, 8)})`); return; }
+    if (card.controller !== playerId) return;
 
     const fromZone = card.zone;
     const fromZoneKey = zoneKey(fromZone);
@@ -130,6 +131,70 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     });
   });
 
+  socket.on('cards:zone', async ({
+    gameRoomId, instanceIds, toZone, toIndex, playerId,
+  }: { gameRoomId: string; instanceIds: string[]; toZone: GameZone; toIndex?: number; playerId: string }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !Array.isArray(instanceIds) || instanceIds.length === 0) return;
+
+    const changes: Array<{ instanceId: string; fromZone: GameZone; toZone: GameZone; toIndex?: number; card: typeof room.cards[string] }> = [];
+
+    for (const instanceId of instanceIds) {
+      const card = room.cards[instanceId];
+      if (!card) continue;
+      if (card.controller !== playerId) continue;
+
+      const player = room.players[card.controller];
+      if (!player) continue;
+
+      const fromZone = card.zone;
+      const fromZoneKey = zoneKey(fromZone);
+      if (fromZoneKey) {
+        const arr = (player as any)[fromZoneKey] as string[];
+        const idx = arr.indexOf(instanceId);
+        if (idx !== -1) arr.splice(idx, 1);
+      }
+
+      card.zone = toZone;
+      if (toZone === 'battlefield') {
+        card.tapped = false;
+        card.faceDown = false;
+      }
+
+      const toZoneKey = zoneKey(toZone);
+      if (toZoneKey) {
+        const arr = (player as any)[toZoneKey] as string[];
+        if (toIndex !== undefined) arr.splice(toIndex, 0, instanceId);
+        else arr.push(instanceId);
+      }
+
+      changes.push({
+        instanceId,
+        fromZone,
+        toZone,
+        toIndex,
+        card: { ...card },
+      });
+    }
+
+    if (changes.length === 0) return;
+
+    const actor = room.players[playerId];
+    if (actor) {
+      const toLabel = toZone.replace('_', ' ');
+      gameService.appendLog(room, playerId, 'zone_change',
+        `${actor.playerName} moved ${changes.length} card${changes.length !== 1 ? 's' : ''} to ${toLabel}`);
+    }
+
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', {
+      type: 'zones_changed',
+      changes,
+      log: room.actionLog.at(-1),
+    });
+  });
+
   // ── Tap / untap ───────────────────────────────────────────────────────────
 
   socket.on('card:tap', async ({
@@ -137,10 +202,30 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
   }: { gameRoomId: string; instanceId: string; tapped: boolean; playerId: string }) => {
     const room = await storage.loadGame(gameRoomId);
     if (!room || !room.cards[instanceId]) return;
+    if (room.cards[instanceId]!.controller !== playerId) return;
     room.cards[instanceId]!.tapped = tapped;
     room.lastActivity = ts();
     await storage.saveGame(room);
     io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'card_tapped', instanceId, tapped });
+  });
+
+  socket.on('cards:tap', async ({
+    gameRoomId, instanceIds, tapped, playerId,
+  }: { gameRoomId: string; instanceIds: string[]; tapped: boolean; playerId: string }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !Array.isArray(instanceIds) || instanceIds.length === 0) return;
+    const changed: string[] = [];
+    for (const instanceId of instanceIds) {
+      const card = room.cards[instanceId];
+      if (!card) continue;
+      if (card.controller !== playerId || card.zone !== 'battlefield') continue;
+      card.tapped = tapped;
+      changed.push(instanceId);
+    }
+    if (changed.length === 0) return;
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'cards_tapped', changed, tapped });
   });
 
   socket.on('cards:tap-all', async ({
@@ -186,6 +271,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     const room = await storage.loadGame(gameRoomId);
     if (!room || !room.cards[instanceId]) return;
     const card = room.cards[instanceId]!;
+    if (card.controller !== playerId || card.zone !== 'battlefield') return;
     const existing = card.counters.find(c => c.type === counterType && c.label === label);
     if (existing) {
       existing.value = existing.value + delta;
@@ -201,6 +287,46 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     room.lastActivity = ts();
     await storage.saveGame(room);
     io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'counters_changed', instanceId, counters: card.counters, log: room.actionLog.at(-1) });
+  });
+
+  socket.on('cards:counter', async ({
+    gameRoomId, instanceIds, counterType, delta, label, playerId,
+  }: { gameRoomId: string; instanceIds: string[]; counterType: string; delta: number; label?: string; playerId: string }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !Array.isArray(instanceIds) || instanceIds.length === 0) return;
+
+    const updates: Array<{ instanceId: string; counters: typeof room.cards[string]['counters'] }> = [];
+
+    for (const instanceId of instanceIds) {
+      const card = room.cards[instanceId];
+      if (!card) continue;
+      if (card.controller !== playerId || card.zone !== 'battlefield') continue;
+
+      const existing = card.counters.find(c => c.type === counterType && c.label === label);
+      if (existing) {
+        existing.value = existing.value + delta;
+      } else if (delta !== 0) {
+        card.counters.push({ type: counterType as any, value: delta, label });
+      }
+      updates.push({ instanceId, counters: [...card.counters] });
+    }
+
+    if (updates.length === 0) return;
+
+    const actor = room.players[playerId];
+    if (actor) {
+      const sign = delta >= 0 ? '+' : '';
+      gameService.appendLog(room, playerId, 'counter_change',
+        `${actor.playerName}: ${sign}${delta} counter on ${updates.length} cards`);
+    }
+
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', {
+      type: 'counters_bulk_changed',
+      updates,
+      log: room.actionLog.at(-1),
+    });
   });
 
   socket.on('card:counter:reset', async ({

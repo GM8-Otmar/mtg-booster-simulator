@@ -45,6 +45,34 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       };
     }
 
+    case 'zones_changed': {
+      const changes = Array.isArray(delta.changes) ? delta.changes : [];
+      let nextRoom = room;
+      for (const change of changes) {
+        const existing = nextRoom.cards[change.instanceId];
+        const publicZones = ['battlefield', 'graveyard', 'exile'];
+        const useRevealed = change.card && publicZones.includes(change.toZone);
+        const baseCard = useRevealed ? change.card : (existing ?? change.card);
+        if (!baseCard) continue;
+        const fromZone = change.fromZone ?? baseCard.zone;
+        const newCard = { ...baseCard, zone: change.toZone as GameZone };
+        const players = reZonePlayer(
+          nextRoom.players,
+          baseCard.controller,
+          change.instanceId,
+          fromZone,
+          change.toZone,
+          change.toIndex,
+        );
+        nextRoom = {
+          ...nextRoom,
+          cards: { ...nextRoom.cards, [change.instanceId]: newCard },
+          players,
+        };
+      }
+      return { ...nextRoom, actionLog: appendLog(nextRoom.actionLog, delta.log) };
+    }
+
     case 'card_tapped': {
       const card = room.cards[delta.instanceId];
       if (!card) return room;
@@ -55,6 +83,16 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
     }
 
     case 'cards_tap_all': {
+      const updatedCards = { ...room.cards };
+      for (const id of delta.changed) {
+        if (updatedCards[id]) {
+          updatedCards[id] = { ...updatedCards[id]!, tapped: delta.tapped };
+        }
+      }
+      return { ...room, cards: updatedCards };
+    }
+
+    case 'cards_tapped': {
       const updatedCards = { ...room.cards };
       for (const id of delta.changed) {
         if (updatedCards[id]) {
@@ -79,6 +117,21 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       return {
         ...room,
         cards: { ...room.cards, [delta.instanceId]: { ...card, counters: delta.counters } },
+        actionLog: appendLog(room.actionLog, delta.log),
+      };
+    }
+
+    case 'counters_bulk_changed': {
+      const updates = Array.isArray(delta.updates) ? delta.updates : [];
+      const updatedCards = { ...room.cards };
+      for (const update of updates) {
+        const card = updatedCards[update.instanceId];
+        if (!card) continue;
+        updatedCards[update.instanceId] = { ...card, counters: update.counters };
+      }
+      return {
+        ...room,
+        cards: updatedCards,
         actionLog: appendLog(room.actionLog, delta.log),
       };
     }
