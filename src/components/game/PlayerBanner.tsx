@@ -14,7 +14,7 @@ interface PlayerBannerProps {
 }
 
 export default function PlayerBanner({ player, isCurrentPlayer = false, compact = false }: PlayerBannerProps) {
-  const { room } = useGameTable();
+  const { room, isTargetingMode, completeTargeting } = useGameTable();
   if (!room) return null;
 
   /* ── Compact single-line banner for 2x2 grid cells ────────────────────── */
@@ -65,9 +65,13 @@ export default function PlayerBanner({ player, isCurrentPlayer = false, compact 
   return (
     <div className="flex flex-col gap-4 p-3">
       {/* Player name */}
-      <div className={`text-sm font-bold truncate ${isCurrentPlayer ? 'text-cyan' : 'text-cream'}`}>
+      <div
+        className={`text-sm font-bold truncate ${isCurrentPlayer ? 'text-cyan' : 'text-cream'} ${isTargetingMode ? 'cursor-crosshair hover:text-red-300 transition-colors' : ''}`}
+        onClick={isTargetingMode ? () => completeTargeting(player.playerId) : undefined}
+      >
         {player.playerName}
         {isCurrentPlayer && <span className="text-cream-muted text-xs font-normal ml-1">(you)</span>}
+        {isTargetingMode && <span className="ml-1 text-red-300 text-xs animate-pulse">⎯ target</span>}
       </div>
 
       {/* Life counter — big and prominent */}

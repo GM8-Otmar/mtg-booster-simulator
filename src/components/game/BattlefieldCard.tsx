@@ -9,6 +9,8 @@ interface BattlefieldCardProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
   isSelected?: boolean;
   onClearSelection?: () => void;
+  /** Called when this card is clicked (no drag) to set it as the selection */
+  onSelect?: (instanceId: string) => void;
   /** All currently-selected cards — forwarded to context menu for bulk actions */
   selectedCards?: BFCard[];
   /** Zone calls this instead of the card handling its own drag (multi-select mode) */
@@ -27,12 +29,13 @@ export default function BattlefieldCard({
   containerRef,
   isSelected,
   onClearSelection,
+  onSelect,
   selectedCards,
   onMultiDragStart,
   multiDragPos,
   isMultiDragLead,
 }: BattlefieldCardProps) {
-  const { moveCard, tapCard, changeZone, playerId } = useGameTable();
+  const { moveCard, tapCard, changeZone, addCounter, effectivePlayerId: playerId, isTargetingMode, completeTargeting, shakingCardIds } = useGameTable();
   const { inspect } = useCardInspector();
 
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -46,6 +49,14 @@ export default function BattlefieldCard({
   const startClientRef = useRef({ x: 0, y: 0 });
   const lastEmitPctRef = useRef({ x: card.x, y: card.y });
   const dragOriginRef = useRef({ x: card.x, y: card.y });
+
+  // Stable refs for callbacks used in window-level effects
+  const onMultiDragStartRef = useRef(onMultiDragStart);
+  useEffect(() => { onMultiDragStartRef.current = onMultiDragStart; }, [onMultiDragStart]);
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  const onClearSelectionRef = useRef(onClearSelection);
+  useEffect(() => { onClearSelectionRef.current = onClearSelection; }, [onClearSelection]);
 
   const isOwner = card.controller === playerId;
   const isFaceDown = card.faceDown;
@@ -71,17 +82,18 @@ export default function BattlefieldCard({
   // ── Pointer down ─────────────────────────────────────────────────────────
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    if (e.button === 2 || !isOwner) return;
     e.stopPropagation();
+    if (e.button === 2) return; // right-click: stop propagation but skip drag logic
 
-    // If this card belongs to a multi-selection, hand the drag off to the zone
-    if (onMultiDragStart) {
-      onMultiDragStart(card.instanceId, e.clientX, e.clientY);
+    // In targeting mode, clicking any card completes targeting
+    if (isTargetingMode) {
+      completeTargeting(card.instanceId);
       return;
     }
 
-    // Single-card drag: clear any existing selection and handle ourselves
-    onClearSelection?.();
+    if (!isOwner) return;
+
+    // Track the press — defer multi-drag and selection decisions to move/release
     draggingRef.current = false;
     movedRef.current = false;
     draggingVisuallyRef.current = false;
@@ -89,12 +101,14 @@ export default function BattlefieldCard({
     lastEmitPctRef.current = { x: card.x, y: card.y };
     dragOriginRef.current = { x: card.x, y: card.y };
     setIsPressed(true);
-  }, [card.x, card.y, card.instanceId, isOwner, onClearSelection, onMultiDragStart]);
+  }, [card.x, card.y, card.instanceId, isOwner, isTargetingMode, completeTargeting]);
 
   // ── Window-level listeners — single-card drag ────────────────────────────
 
   useEffect(() => {
     if (!isPressed) return;
+
+    let handedOff = false; // true once we hand off to zone's multi-drag
 
     const clearZoneHighlights = () => {
       document.querySelectorAll('[data-drop-zone]').forEach(el => {
@@ -103,6 +117,8 @@ export default function BattlefieldCard({
     };
 
     const onMove = (e: PointerEvent) => {
+      if (handedOff) return;
+
       const dx = e.clientX - startClientRef.current.x;
       const dy = e.clientY - startClientRef.current.y;
       if (!draggingRef.current && Math.sqrt(dx * dx + dy * dy) < 4) return;
@@ -110,9 +126,21 @@ export default function BattlefieldCard({
       draggingRef.current = true;
       movedRef.current = true;
 
+      // Multi-selection drag: hand off to zone after movement threshold
+      if (onMultiDragStartRef.current) {
+        handedOff = true;
+        draggingRef.current = false; // Reset — zone owns the drag now; keeps position-sync effect working
+        movedRef.current = true;
+        onMultiDragStartRef.current(card.instanceId, startClientRef.current.x, startClientRef.current.y);
+        setIsPressed(false); // Zone takes over
+        return;
+      }
+
       if (!draggingVisuallyRef.current) {
         draggingVisuallyRef.current = true;
         setIsDragging(true);
+        // Clear selection once at drag start (not every frame)
+        onClearSelectionRef.current?.();
       }
 
       const container = containerRef.current;
@@ -138,6 +166,8 @@ export default function BattlefieldCard({
     };
 
     const onUp = (e: PointerEvent) => {
+      if (handedOff) { setIsPressed(false); return; }
+
       clearZoneHighlights();
 
       if (draggingRef.current) {
@@ -159,7 +189,13 @@ export default function BattlefieldCard({
           }
         }
       } else if (!movedRef.current) {
-        // Clean click → inspect
+        // Clean left-click with no movement.
+        // If this card is part of a multi-selection, PRESERVE it so the user can
+        // subsequently right-click for bulk actions or double-click for bulk tap.
+        // If this card is NOT in a multi-selection, select just this card.
+        if (!onMultiDragStartRef.current) {
+          onSelectRef.current?.(card.instanceId);
+        }
         inspect({ name: card.name, imageUri: isFaceDown ? null : card.imageUri, instanceId: card.instanceId });
       }
 
@@ -180,13 +216,22 @@ export default function BattlefieldCard({
     };
   }, [isPressed, card.instanceId, card.name, card.imageUri, isFaceDown, containerRef, moveCard, changeZone, inspect]);
 
-  // ── Double-click: tap/untap ──────────────────────────────────────────────
+  // ── Double-click: tap/untap (selection-aware) ───────────────────────────
 
   const onDoubleClick = useCallback((e: React.MouseEvent) => {
     if (!isOwner || movedRef.current) return;
     e.stopPropagation();
-    tapCard(card.instanceId, !card.tapped);
-  }, [card.instanceId, card.tapped, isOwner, tapCard]);
+
+    // Bulk: tap/untap all selected cards together
+    if (isSelected && selectedCards && selectedCards.length > 1) {
+      const owned = selectedCards.filter(c => c.controller === playerId);
+      if (owned.length === 0) return;
+      const anyUntapped = owned.some(c => !c.tapped);
+      for (const c of owned) tapCard(c.instanceId, anyUntapped);
+    } else {
+      tapCard(card.instanceId, !card.tapped);
+    }
+  }, [card.instanceId, card.tapped, isOwner, tapCard, isSelected, selectedCards, playerId]);
 
   // ── Right-click: context menu ────────────────────────────────────────────
 
@@ -196,14 +241,19 @@ export default function BattlefieldCard({
     setMenuPos({ x: e.clientX, y: e.clientY });
   }, []);
 
-  // ── Counter badges ────────────────────────────────────────────────────────
+  // ── Counter badge ─────────────────────────────────────────────────────────
 
-  const totalPP = card.counters.filter(c => c.type === 'plus1plus1').reduce((s, c) => s + c.value, 0);
-  const totalMM = card.counters.filter(c => c.type === 'minus1minus1').reduce((s, c) => s + c.value, 0);
-  const loyalty = card.counters.find(c => c.type === 'loyalty')?.value ?? null;
-  const charge = card.counters.find(c => c.type === 'charge')?.value ?? null;
+  const counterTotal = card.counters.reduce((sum, c) => sum + c.value, 0);
+  const hasCounters = card.counters.length > 0;
+  const firstCounter = card.counters[0] ?? null;
+  const counterBgColor = counterTotal > 0
+    ? 'bg-green-600'
+    : counterTotal < 0
+      ? 'bg-red-600'
+      : 'bg-gray-500';
 
   const borderColor = isOwner ? 'border-cyan/40' : 'border-magenta/40';
+  const isShaking = shakingCardIds.has(card.instanceId);
 
   // Pass all selected cards to the menu when right-clicking a selected card
   const bulkCards = isSelected && selectedCards && selectedCards.length > 1 ? selectedCards : undefined;
@@ -237,9 +287,10 @@ export default function BattlefieldCard({
             ? `rotate(90deg)${effectiveDragging ? ' scale(1.08)' : ''}`
             : effectiveDragging ? 'scale(1.08)' : undefined,
           transition: effectiveDragging ? 'none' : 'transform 0.15s ease',
-          zIndex: effectiveDragging ? 50 : 10,
-          cursor: effectiveDragging ? 'grabbing' : 'grab',
+          zIndex: effectiveDragging ? 50 : isShaking ? 40 : 10,
+          cursor: isTargetingMode ? 'crosshair' : effectiveDragging ? 'grabbing' : 'grab',
           boxShadow: effectiveDragging ? '0 8px 24px rgba(0,0,0,0.65)' : undefined,
+          animation: isShaking ? 'card-shake 0.1s ease-in-out 6' : undefined,
         }}
         onPointerDown={onPointerDown}
         onDoubleClick={onDoubleClick}
@@ -271,28 +322,27 @@ export default function BattlefieldCard({
           </div>
         )}
 
-        {(totalPP !== 0 || totalMM !== 0 || loyalty !== null || charge !== null) && (
-          <div className="absolute bottom-0 left-0 right-0 flex gap-1 justify-center pb-1 flex-wrap z-20">
-            {totalPP !== 0 && (
-              <span className="bg-green-600 text-white text-[9px] font-bold rounded-full px-1.5 shadow">
-                +{totalPP}/+{totalPP}
-              </span>
-            )}
-            {totalMM !== 0 && (
-              <span className="bg-red-700 text-white text-[9px] font-bold rounded-full px-1.5 shadow">
-                −{totalMM}/−{totalMM}
-              </span>
-            )}
-            {loyalty !== null && (
-              <span className="bg-blue-600 text-white text-[9px] font-bold rounded-full px-1.5 shadow">
-                👁 {loyalty}
-              </span>
-            )}
-            {charge !== null && (
-              <span className="bg-yellow-600 text-white text-[9px] font-bold rounded-full px-1.5 shadow">
-                ⚡{charge}
-              </span>
-            )}
+        {hasCounters && (
+          <div
+            className="absolute bottom-0 left-0 right-0 flex justify-center pb-1 z-20"
+            onPointerDown={e => e.stopPropagation()}
+            onDoubleClick={e => e.stopPropagation()}
+          >
+            <span
+              title={firstCounter ? (firstCounter.label ?? firstCounter.type) : undefined}
+              className={`${counterBgColor} text-white text-[10px] font-bold rounded-full min-w-[24px] h-6 flex items-center justify-center px-1.5 shadow cursor-pointer select-none`}
+              onClick={e => {
+                e.stopPropagation();
+                if (firstCounter) addCounter(card.instanceId, firstCounter.type, 1, firstCounter.label);
+              }}
+              onContextMenu={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (firstCounter) addCounter(card.instanceId, firstCounter.type, -1, firstCounter.label);
+              }}
+            >
+              {counterTotal > 0 ? `+${counterTotal}` : counterTotal}
+            </span>
           </div>
         )}
 

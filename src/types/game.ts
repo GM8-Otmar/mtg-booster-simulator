@@ -79,6 +79,9 @@ export interface GameRoom {
   cards: Record<string, BattlefieldCard>;
   players: Record<string, GamePlayerState>;
   actionLog: GameAction[];
+
+  turnOrder: string[];        // player IDs in play order
+  activePlayerIndex: number;  // index into turnOrder
 }
 
 export interface TokenTemplate {

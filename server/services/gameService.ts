@@ -55,6 +55,8 @@ export async function createGame(
       [playerId]: makePlayer(playerId, hostName, startingLife(format)),
     },
     actionLog: [],
+    turnOrder: [playerId],
+    activePlayerIndex: 0,
   };
 
   await storage.saveGame(room);
@@ -72,6 +74,15 @@ export async function joinGame(
   const playerId = uuidv4();
   room.players[playerId] = makePlayer(playerId, playerName, startingLife(room.format));
   room.lastActivity = new Date().toISOString();
+
+  // Rebuild and shuffle turn order with Fisher-Yates
+  const newOrder = Object.keys(room.players);
+  for (let i = newOrder.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newOrder[i], newOrder[j]] = [newOrder[j]!, newOrder[i]!];
+  }
+  room.turnOrder = newOrder;
+  room.activePlayerIndex = 0;
 
   await storage.saveGame(room);
   return { room, playerId };

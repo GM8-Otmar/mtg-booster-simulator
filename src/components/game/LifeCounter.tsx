@@ -8,7 +8,7 @@ interface LifeCounterProps {
 }
 
 export default function LifeCounter({ life, poison, playerId }: LifeCounterProps) {
-  const { adjustLife, setLife, adjustPoison, playerId: myId } = useGameTable();
+  const { adjustLife, setLife, adjustPoison, effectivePlayerId: myId } = useGameTable();
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const isOwner = playerId === myId;

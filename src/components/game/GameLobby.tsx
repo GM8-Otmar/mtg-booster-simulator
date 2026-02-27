@@ -23,7 +23,7 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
 
   // Sandbox fields
   const [sandboxName, setSandboxName] = useState('You');
-  const [sandboxPlayers, setSandboxPlayers] = useState<1 | 2>(1);
+  const [sandboxPlayers, setSandboxPlayers] = useState<1 | 2 | 3 | 4>(1);
 
   const handleCreate = async () => {
     if (!createName.trim()) return;
@@ -197,11 +197,13 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
               <label className="block text-xs text-cream-muted mb-1">Players</label>
               <select
                 value={sandboxPlayers}
-                onChange={e => setSandboxPlayers(Number(e.target.value) as 1 | 2)}
+                onChange={e => setSandboxPlayers(Number(e.target.value) as 1 | 2 | 3 | 4)}
                 className="h-[34px] bg-navy border border-yellow-600/30 rounded-lg px-2 text-cream text-sm focus:outline-none focus:border-yellow-500"
               >
                 <option value={1}>1 (solo)</option>
-                <option value={2}>2 (vs AI)</option>
+                <option value={2}>2 players</option>
+                <option value={3}>3 players</option>
+                <option value={4}>4 players</option>
               </select>
             </div>
           </div>

@@ -16,6 +16,13 @@ const ACTION_COLORS: Record<string, string> = {
   concede: 'text-red-400',
   message: 'text-cream',
   life_change: 'text-green-300',
+  tap_all: 'text-cream-muted',
+  counter_change: 'text-blue-300',
+  poison_change: 'text-purple-400',
+  dice_roll: 'text-amber-300',
+  reveal: 'text-yellow-300',
+  turn_pass: 'text-orange-400',
+  targeting: 'text-red-300',
 };
 
 function formatTime(iso: string): string {
@@ -42,8 +49,8 @@ export default function GameActionLog({ actions }: GameActionLogProps) {
           <p className="text-cream-muted/40 text-xs italic">No actions yet…</p>
         ) : (
           actions.map(action => (
-            <div key={action.id} className="flex gap-2 items-start">
-              <span className="text-[9px] text-cream-muted/50 font-mono shrink-0 mt-0.5">
+            <div key={action.id} className="py-0.5">
+              <span className="text-[9px] text-cream/60 font-mono block">
                 {formatTime(action.timestamp)}
               </span>
               <p className={`text-xs leading-snug ${ACTION_COLORS[action.type] ?? 'text-cream-muted'}`}>

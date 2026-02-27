@@ -25,9 +25,9 @@ interface MenuItem {
 
 export default function CardContextMenu({ card, x, y, onClose, selectedCards }: CardContextMenuProps) {
   const {
-    changeZone, tapCard, setFaceDown,
-    addCounter, notifyCommanderCast,
-    createToken, playerId,
+    changeZone, bulkChangeZone, tapCard, setFaceDown,
+    addCounter, bulkAddCounter, resetCounters, notifyCommanderCast,
+    createToken, revealCards, startTargeting, effectivePlayerId: playerId,
   } = useGameTable();
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -65,7 +65,6 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
     { label: 'Graveyard', zone: 'graveyard' },
     { label: 'Exile', zone: 'exile' },
     { label: 'Command Zone', zone: 'command_zone' },
-    { label: 'Sideboard', zone: 'sideboard' },
   ];
 
   const sections: MenuSection[] = [];
@@ -94,29 +93,22 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
       label: 'Move all to…',
       items: zones.map(z => ({
         label: z.label,
-        action: () => doAll(c => changeZone(c.instanceId, z.zone, z.toIndex)),
+        action: () => { bulkChangeZone(targets.map(c => c.instanceId), z.zone, z.toIndex); onClose(); },
       })),
     });
 
     if (onBattlefield) {
+      const bfIds = targets.filter(c => c.zone === 'battlefield').map(c => c.instanceId);
       sections.push({
-        label: 'Add counter to all',
+        label: 'Counters (all)',
         items: [
           {
-            label: '+1/+1 counter (+)',
-            action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'plus1plus1', 1); }),
+            label: 'Counter +1 all',
+            action: () => { bulkAddCounter(bfIds, 'generic', 1); onClose(); },
           },
           {
-            label: '+1/+1 counter (−)',
-            action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'plus1plus1', -1); }),
-          },
-          {
-            label: '−1/−1 counter (+)',
-            action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'minus1minus1', 1); }),
-          },
-          {
-            label: 'Charge counter (+)',
-            action: () => doAll(c => { if (c.zone === 'battlefield') addCounter(c.instanceId, 'charge', 1); }),
+            label: 'Counter -1 all',
+            action: () => { bulkAddCounter(bfIds, 'generic', -1); onClose(); },
           },
         ],
       });
@@ -142,6 +134,19 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
                 Math.min(96, c.y + 5),
               );
             }),
+          },
+        ],
+      });
+    }
+
+    // Reveal hand cards in bulk
+    const handTargets = targets.filter(c => c.zone === 'hand');
+    if (handTargets.length > 0) {
+      sections.push({
+        items: [
+          {
+            label: 'Reveal selected to all',
+            action: () => do_(() => revealCards(handTargets.map(c => c.instanceId))),
           },
         ],
       });
@@ -174,32 +179,58 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
     });
 
     if (card.zone === 'battlefield') {
+      const hasCounter = card.counters.length > 0;
+      const firstCounter = card.counters[0];
+      if (!hasCounter) {
+        sections.push({
+          items: [
+            {
+              label: 'Add counter',
+              action: () => do_(() => addCounter(card.instanceId, 'generic', 1)),
+            },
+          ],
+        });
+      } else {
+        sections.push({
+          label: 'Counters',
+          items: [
+            {
+              label: 'Counter +1',
+              action: () => do_(() => addCounter(card.instanceId, firstCounter!.type, 1, firstCounter!.label)),
+            },
+            {
+              label: 'Counter -1',
+              action: () => do_(() => addCounter(card.instanceId, firstCounter!.type, -1, firstCounter!.label)),
+            },
+            {
+              label: 'Remove counter',
+              action: () => do_(() => resetCounters(card.instanceId)),
+              danger: true,
+            },
+          ],
+        });
+      }
+    }
+
+    // Reveal (hand cards only)
+    if (card.zone === 'hand') {
       sections.push({
-        label: 'Counters',
         items: [
           {
-            label: '+1/+1 counter (+)',
-            action: () => do_(() => addCounter(card.instanceId, 'plus1plus1', 1)),
+            label: 'Reveal to all',
+            action: () => do_(() => revealCards([card.instanceId])),
           },
+        ],
+      });
+    }
+
+    // Target (battlefield only)
+    if (card.zone === 'battlefield') {
+      sections.push({
+        items: [
           {
-            label: '+1/+1 counter (−)',
-            action: () => do_(() => addCounter(card.instanceId, 'plus1plus1', -1)),
-          },
-          {
-            label: '−1/−1 counter (+)',
-            action: () => do_(() => addCounter(card.instanceId, 'minus1minus1', 1)),
-          },
-          {
-            label: 'Loyalty counter (+)',
-            action: () => do_(() => addCounter(card.instanceId, 'loyalty', 1)),
-          },
-          {
-            label: 'Loyalty counter (−)',
-            action: () => do_(() => addCounter(card.instanceId, 'loyalty', -1)),
-          },
-          {
-            label: 'Charge counter (+)',
-            action: () => do_(() => addCounter(card.instanceId, 'charge', 1)),
+            label: 'Target…',
+            action: () => do_(() => startTargeting(card.instanceId)),
           },
         ],
       });
@@ -291,7 +322,7 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
             <button
               key={ii}
               onClick={item.action}
-              disabled={!isOwner && !['Move to…', 'Move all to…'].includes(section.label ?? '')}
+              disabled={!isOwner && !isBulk && !['Move to…', 'Clone'].includes(section.label ?? '') && item.label !== 'Target…'}
               className={`w-full text-left px-3 py-1.5 transition-colors
                 ${item.danger ? 'text-red-400 hover:bg-red-900/30' : 'text-cream hover:bg-cyan-dim/40'}
                 disabled:opacity-40 disabled:cursor-not-allowed`}

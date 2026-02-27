@@ -55,6 +55,8 @@ function makeRoom(overrides: Partial<GameRoom> = {}): GameRoom {
     cards: { [card.instanceId]: card },
     players: { [player.playerId]: player },
     actionLog: [],
+    turnOrder: ['player-1'],
+    activePlayerIndex: 0,
     ...overrides,
   };
 }

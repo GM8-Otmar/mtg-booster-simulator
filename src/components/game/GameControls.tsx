@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useGameTable } from '../../contexts/GameTableContext';
 import DeckImportModal from './DeckImportModal';
 import TokenCreatorModal from './TokenCreatorModal';
+import DiceRollerModal from './DiceRollerModal';
 import type { TokenTemplate } from '../../types/game';
 
 interface GameControlsProps {
@@ -24,20 +25,14 @@ const COMMON_TOKENS: TokenTemplate[] = [
 export default function GameControls({ onConcede }: GameControlsProps) {
   const {
     drawCards, shuffleLibrary, untapAll, tapAll,
-    mulligan, createToken, sendMessage, myLibraryCount,
+    mulligan, createToken, myLibraryCount,
   } = useGameTable();
 
   const [showImport, setShowImport] = useState(false);
   const [showTokens, setShowTokens] = useState(false);
   const [showTokenCreator, setShowTokenCreator] = useState(false);
+  const [showDiceRoller, setShowDiceRoller] = useState(false);
   const [showConfirmConcede, setShowConfirmConcede] = useState(false);
-  const [chatText, setChatText] = useState('');
-
-  const handleSendChat = () => {
-    if (!chatText.trim()) return;
-    sendMessage(chatText.trim());
-    setChatText('');
-  };
 
   const handleCreateToken = (template: TokenTemplate, count = 1) => {
     for (let i = 0; i < count; i++) {
@@ -86,6 +81,12 @@ export default function GameControls({ onConcede }: GameControlsProps) {
           Shuffle
         </button>
         <button
+          onClick={() => setShowDiceRoller(true)}
+          className="py-1.5 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 rounded-lg text-amber-300 transition-all"
+        >
+          🎲 Roll Dice
+        </button>
+        <button
           onClick={() => mulligan(7)}
           className="py-1.5 text-xs font-semibold bg-navy-light hover:bg-navy border border-cyan-dim rounded-lg text-cream-muted transition-all"
         >
@@ -132,25 +133,6 @@ export default function GameControls({ onConcede }: GameControlsProps) {
         Import / Reload Deck
       </button>
 
-      {/* Chat */}
-      <div className="flex gap-1 mt-1">
-        <input
-          type="text"
-          value={chatText}
-          onChange={e => setChatText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSendChat()}
-          placeholder="Message…"
-          className="flex-1 text-xs bg-navy border border-cyan-dim rounded-lg px-2 py-1.5 text-cream placeholder-cream-muted/40 focus:outline-none focus:border-cyan"
-        />
-        <button
-          onClick={handleSendChat}
-          disabled={!chatText.trim()}
-          className="px-2 py-1.5 bg-navy-light border border-cyan-dim rounded-lg text-cream-muted text-xs hover:text-cream disabled:opacity-40 transition-all"
-        >
-          →
-        </button>
-      </div>
-
       {/* Concede */}
       {!showConfirmConcede ? (
         <button
@@ -178,6 +160,7 @@ export default function GameControls({ onConcede }: GameControlsProps) {
 
       {showImport && <DeckImportModal onClose={() => setShowImport(false)} />}
       {showTokenCreator && <TokenCreatorModal onClose={() => setShowTokenCreator(false)} />}
+      {showDiceRoller && <DiceRollerModal onClose={() => setShowDiceRoller(false)} />}
     </div>
   );
 }
