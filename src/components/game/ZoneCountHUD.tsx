@@ -1,3 +1,4 @@
+import { Hand, Skull, Hexagon } from 'lucide-react';
 import { useGameTable } from '../../contexts/GameTableContext';
 
 /**
@@ -30,25 +31,25 @@ export default function ZoneCountHUD() {
 
             {/* Hand */}
             <span className="flex items-center gap-0.5" title="Hand">
-              <span className="text-cream-muted/60">🃏</span>
+              <Hand className="w-3 h-3 text-cream-muted/60 shrink-0" />
               <span className={`font-bold tabular-nums ${isMe ? 'text-cream' : 'text-cream-muted'}`}>
-                {p.handCardIds.length}
+                {p.handCardIds?.length ?? 0}
               </span>
             </span>
 
             {/* Graveyard */}
             <span className="flex items-center gap-0.5" title="Graveyard">
-              <span className="text-cream-muted/60">☠</span>
+              <Skull className="w-3 h-3 text-cream-muted/60 shrink-0" />
               <span className={`font-bold tabular-nums ${isMe ? 'text-cream' : 'text-cream-muted'}`}>
-                {p.graveyardCardIds.length}
+                {p.graveyardCardIds?.length ?? 0}
               </span>
             </span>
 
             {/* Exile */}
             <span className="flex items-center gap-0.5" title="Exile">
-              <span className="text-cream-muted/60">⬡</span>
+              <Hexagon className="w-3 h-3 text-cream-muted/60 shrink-0" />
               <span className={`font-bold tabular-nums ${isMe ? 'text-cream' : 'text-cream-muted'}`}>
-                {p.exileCardIds.length}
+                {p.exileCardIds?.length ?? 0}
               </span>
             </span>
           </div>

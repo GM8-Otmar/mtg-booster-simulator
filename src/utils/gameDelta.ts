@@ -25,11 +25,18 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
     }
 
     case 'zone_changed': {
-      const card = room.cards[delta.instanceId];
-      if (!card) return room;
-      const oldZone = card.zone;
-      const newCard = { ...card, zone: delta.toZone as GameZone };
-      const players = reZonePlayer(room.players, card.controller, delta.instanceId, oldZone, delta.toZone, delta.toIndex);
+      const existing = room.cards[delta.instanceId];
+      const publicZones = ['battlefield', 'graveyard', 'exile'];
+      const useRevealed = delta.card && publicZones.includes(delta.toZone);
+      const baseCard = useRevealed ? delta.card : (existing ?? delta.card);
+      console.log(`[MTG-delta] zone_changed id=${delta.instanceId?.slice(0, 8)} ${delta.fromZone}→${delta.toZone}`,
+        { existing: existing ? { name: existing.name, zone: existing.zone, controller: existing.controller?.slice(0, 8) } : null,
+          deltaCard: delta.card ? { name: delta.card.name, zone: delta.card.zone, controller: delta.card.controller?.slice(0, 8) } : null,
+          useRevealed, baseCard: baseCard ? { name: baseCard.name, controller: baseCard.controller?.slice(0, 8) } : null });
+      if (!baseCard) { console.warn('[MTG-delta] zone_changed: NO baseCard, skipping!'); return room; }
+      const fromZone = delta.fromZone ?? baseCard.zone;
+      const newCard = { ...baseCard, zone: delta.toZone as GameZone };
+      const players = reZonePlayer(room.players, baseCard.controller, delta.instanceId, fromZone, delta.toZone, delta.toIndex);
       return {
         ...room,
         cards: { ...room.cards, [delta.instanceId]: newCard },
@@ -156,11 +163,15 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       const player = room.players[delta.playerId];
       if (!player) return room;
       const newLibIds = player.libraryCardIds.slice(delta.count);
+      const newHandIds = [...player.handCardIds];
+      for (let i = 0; i < delta.count; i++) {
+        newHandIds.push(`hidden-${Date.now()}-${i}`);
+      }
       return {
         ...room,
         players: {
           ...room.players,
-          [delta.playerId]: { ...player, libraryCardIds: newLibIds },
+          [delta.playerId]: { ...player, libraryCardIds: newLibIds, handCardIds: newHandIds },
         },
         actionLog: appendLog(room.actionLog, delta.log),
       };
@@ -228,10 +239,14 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
     case 'player_connected': {
       if (!delta.player) return room;
       const newCards = delta.cards ? { ...room.cards, ...delta.cards } : room.cards;
+      const incomingCardCount = delta.cards ? Object.keys(delta.cards).length : 0;
+      console.log(`[MTG-delta] ${delta.type}: player=${delta.player.playerName} (${delta.player.playerId?.slice(0, 8)}), incoming cards=${incomingCardCount}, total cards after merge=${Object.keys(newCards).length}, turnOrder=`, delta.turnOrder);
       return {
         ...room,
         players: { ...room.players, [delta.player.playerId]: delta.player },
         cards: newCards,
+        turnOrder: delta.turnOrder ?? room.turnOrder,
+        activePlayerIndex: delta.activePlayerIndex ?? room.activePlayerIndex,
       };
     }
 
@@ -278,10 +293,21 @@ export function reZonePlayer(
   let updated = { ...player };
 
   if (fromKey) {
-    updated = {
-      ...updated,
-      [fromKey]: (updated[fromKey] as string[]).filter(id => id !== instanceId),
-    };
+    const arr = updated[fromKey] as string[];
+    const idx = arr.indexOf(instanceId);
+    if (idx !== -1) {
+      updated = { ...updated, [fromKey]: arr.filter(id => id !== instanceId) };
+    } else {
+      // ID not found — the client may have placeholder entries for opponent's
+      // private zones (e.g. 'hidden-*' from draws, '?' from mulligans).
+      // Remove one placeholder to keep the count accurate.
+      const placeholderIdx = arr.findIndex(id => id.startsWith('hidden-') || id === '?');
+      if (placeholderIdx !== -1) {
+        const newArr = [...arr];
+        newArr.splice(placeholderIdx, 1);
+        updated = { ...updated, [fromKey]: newArr };
+      }
+    }
   }
   if (toKey) {
     const toArr = [...(updated[toKey] as string[])];

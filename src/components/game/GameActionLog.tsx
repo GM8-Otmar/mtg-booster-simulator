@@ -49,11 +49,9 @@ export default function GameActionLog({ actions }: GameActionLogProps) {
           <p className="text-cream-muted/40 text-xs italic">No actions yet…</p>
         ) : (
           actions.map(action => (
-            <div key={action.id} className="py-0.5">
-              <span className="text-[9px] text-cream/60 font-mono block">
-                {formatTime(action.timestamp)}
-              </span>
-              <p className={`text-xs leading-snug ${ACTION_COLORS[action.type] ?? 'text-cream-muted'}`}>
+            <div key={action.id} className="py-1 border-b border-cream/5 last:border-b-0">
+              <span className="text-[9px] text-cream font-mono block">{formatTime(action.timestamp)}</span>
+              <p className={`text-xs leading-snug break-words mt-0.5 ${ACTION_COLORS[action.type] ?? 'text-cream-muted'}`}>
                 {action.description}
               </p>
             </div>

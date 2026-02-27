@@ -271,7 +271,7 @@ export default function HandZone({ cards }: HandZoneProps) {
       ? [...selectedIds]
       : [instanceId];
 
-    const battlefield = document.querySelector('[data-battlefield]') as HTMLElement | null;
+    const battlefield = document.querySelector('[data-battlefield="mine"]') as HTMLElement | null;
     const bfRect = battlefield?.getBoundingClientRect();
 
     toPlay.forEach((id, idx) => {

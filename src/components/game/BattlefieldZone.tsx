@@ -7,6 +7,8 @@ interface BattlefieldZoneProps {
   cards: BattlefieldCard[];
   label?: string;
   heightClass?: string;
+  /** Mark as own battlefield so hand drops target this zone (not opponent's) */
+  isOwnBattlefield?: boolean;
 }
 
 const CARD_W_PX = 80;
@@ -32,6 +34,7 @@ export default function BattlefieldZone({
   cards,
   label,
   heightClass = 'flex-1 min-h-0',
+  isOwnBattlefield = false,
 }: BattlefieldZoneProps) {
   const {
     tapCard, changeZone, moveCard, effectivePlayerId: playerId,
@@ -306,7 +309,7 @@ export default function BattlefieldZone({
   return (
     <div
       ref={containerRef}
-      data-battlefield
+      data-battlefield={isOwnBattlefield ? 'mine' : undefined}
       className={`relative ${heightClass} bg-navy-light/30 rounded-xl border border-cyan-dim/30 overflow-hidden`}
       onPointerDown={onPointerDown}
       onContextMenu={onContextMenu}

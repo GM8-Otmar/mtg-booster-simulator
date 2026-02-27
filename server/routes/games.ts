@@ -1,9 +1,11 @@
 import { Router, Request, Response } from 'express';
 import * as gameService from '../services/gameService';
 import * as storage from '../services/gameStorageService';
+import { io } from '../index';
 import type { ParsedDeck } from '../types/game';
 
 const router = Router();
+const GAME_ROOM = (id: string) => `game:${id}`;
 
 /** POST /api/games — create a room */
 router.post('/', async (req: Request, res: Response) => {
@@ -54,6 +56,20 @@ router.post('/:gameId/import-deck', async (req: Request, res: Response) => {
     const { playerId, deck }: { playerId: string; deck: ParsedDeck } = req.body;
     if (!playerId || !deck) return res.status(400).json({ error: 'playerId and deck required' });
     const room = await gameService.importDeck(req.params.gameId!, playerId, deck);
+    const joiningPlayer = room.players[playerId]!;
+    const joiningCards: Record<string, (typeof room.cards)[string]> = {};
+    for (const [cid, card] of Object.entries(room.cards)) {
+      if (card.controller === playerId) joiningCards[cid] = card;
+    }
+    const socketsInRoom = await io.in(GAME_ROOM(room.id)).fetchSockets();
+    console.log(`[MTG-SERVER] import-deck — player=${joiningPlayer.playerName} (${playerId.slice(0, 8)}), cards=${Object.keys(joiningCards).length}, room=${GAME_ROOM(room.id)}, sockets in room=${socketsInRoom.length}, turnOrder=`, room.turnOrder);
+    io.to(GAME_ROOM(room.id)).emit('game:delta', {
+      type: 'player_joined',
+      player: joiningPlayer,
+      cards: joiningCards,
+      turnOrder: room.turnOrder,
+      activePlayerIndex: room.activePlayerIndex,
+    });
     res.json({ room });
   } catch (err) {
     console.error('importDeck error:', err);
