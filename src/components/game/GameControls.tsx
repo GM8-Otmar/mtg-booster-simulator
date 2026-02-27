@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Dices } from 'lucide-react';
 import { useGameTable } from '../../contexts/GameTableContext';
 import DeckImportModal from './DeckImportModal';
 import TokenCreatorModal from './TokenCreatorModal';
@@ -26,6 +27,7 @@ export default function GameControls({ onConcede }: GameControlsProps) {
   const {
     drawCards, shuffleLibrary, untapAll, tapAll,
     mulligan, createToken, myLibraryCount,
+    passTurn, isMyTurn,
   } = useGameTable();
 
   const [showImport, setShowImport] = useState(false);
@@ -62,6 +64,14 @@ export default function GameControls({ onConcede }: GameControlsProps) {
         >
           Draw 7
         </button>
+        {isMyTurn && (
+          <button
+            onClick={passTurn}
+            className="py-1.5 text-xs font-bold bg-orange-500/25 hover:bg-orange-500/35 border border-orange-500/50 rounded-lg text-orange-300 transition-all"
+          >
+            Pass Turn →
+          </button>
+        )}
         <button
           onClick={untapAll}
           className="py-1.5 text-xs font-semibold bg-navy-light hover:bg-navy border border-cyan-dim rounded-lg text-cream transition-all"
@@ -82,9 +92,9 @@ export default function GameControls({ onConcede }: GameControlsProps) {
         </button>
         <button
           onClick={() => setShowDiceRoller(true)}
-          className="py-1.5 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 rounded-lg text-amber-300 transition-all"
+          className="py-1.5 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 rounded-lg text-amber-300 transition-all flex items-center justify-center gap-1"
         >
-          🎲 Roll Dice
+          <Dices className="w-3.5 h-3.5" /> Roll Dice
         </button>
         <button
           onClick={() => mulligan(7)}

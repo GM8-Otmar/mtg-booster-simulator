@@ -167,20 +167,57 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     const sock = io(SOCKET_URL);
     socketRef.current = sock;
 
-    sock.on('connect', () => setConnected(true));
-    sock.on('disconnect', () => setConnected(false));
-    sock.on('game:error', (msg: string) => setError(msg));
+    sock.on('connect', () => {
+      console.log('[MTG] socket connected, id=', sock.id);
+      setConnected(true);
+    });
+    sock.on('disconnect', (reason) => {
+      console.warn('[MTG] socket disconnected, reason=', reason);
+      setConnected(false);
+    });
+    sock.on('game:error', (msg: string) => {
+      console.error('[MTG] game:error', msg);
+      setError(msg);
+    });
 
     // Full state snapshot (on join)
     sock.on('game:state', (snapshot: GameRoom) => {
+      const playerIds = Object.keys(snapshot.players);
+      const cardCount = Object.keys(snapshot.cards).length;
+      const bfCards = Object.values(snapshot.cards).filter(c => c.zone === 'battlefield');
+      console.log(`[MTG] game:state received — ${playerIds.length} players, ${cardCount} cards total, ${bfCards.length} on battlefield, turnOrder=`, snapshot.turnOrder);
+      for (const [pid, p] of Object.entries(snapshot.players)) {
+        console.log(`  [MTG] player ${p.playerName} (${pid.slice(0, 8)}): hand=${p.handCardIds.length} lib=${p.libraryCardIds.length} gy=${p.graveyardCardIds.length}`);
+      }
       setRoom(snapshot);
     });
 
     // Delta patches — apply to local state
     sock.on('game:delta', (delta: any) => {
+      console.log(`[MTG] game:delta type=${delta.type}`, delta.type === 'zone_changed'
+        ? { instanceId: delta.instanceId?.slice(0, 8), fromZone: delta.fromZone, toZone: delta.toZone, cardName: delta.card?.name, controller: delta.card?.controller?.slice(0, 8) }
+        : delta.type === 'player_joined'
+        ? { playerId: delta.player?.playerId?.slice(0, 8), playerName: delta.player?.playerName, cardCount: delta.cards ? Object.keys(delta.cards).length : 0, turnOrder: delta.turnOrder }
+        : delta.type === 'cards_drawn_other'
+        ? { playerId: delta.playerId?.slice(0, 8), count: delta.count }
+        : delta.type === 'life_changed'
+        ? { playerId: delta.playerId?.slice(0, 8), life: delta.life }
+        : {});
       setRoom(prev => {
         if (!prev) return prev;
-        return applyDelta(prev, delta, playerIdRef.current);
+        const next = applyDelta(prev, delta, playerIdRef.current);
+        if (delta.type === 'zone_changed') {
+          const card = next.cards[delta.instanceId];
+          console.log(`  [MTG] after applyDelta: card in room.cards?`, !!card, card ? `zone=${card.zone} controller=${card.controller?.slice(0, 8)}` : '');
+          const bfForController = Object.values(next.cards).filter(c => c.zone === 'battlefield' && c.controller === delta.card?.controller);
+          console.log(`  [MTG] battlefield cards for controller ${delta.card?.controller?.slice(0, 8)}:`, bfForController.length);
+        }
+        if (delta.type === 'player_joined') {
+          const playerIds = Object.keys(next.players);
+          const cardCount = Object.keys(next.cards).length;
+          console.log(`  [MTG] after player_joined: ${playerIds.length} players, ${cardCount} cards, turnOrder=`, next.turnOrder);
+        }
+        return next;
       });
     });
 
@@ -211,8 +248,18 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const sock = socketRef.current;
     if (!sock || !gameRoomId || !playerId) return;
-    sock.emit('game:join', { gameRoomId, playerId });
+
+    const doJoin = () => {
+      console.log(`[MTG] emitting game:join (room=${gameRoomId.slice(0, 8)}, player=${playerId.slice(0, 8)}, socketId=${sock.id})`);
+      sock.emit('game:join', { gameRoomId, playerId });
+    };
+
+    doJoin();
+    // Re-join after reconnection so server-side room membership is restored
+    sock.on('connect', doJoin);
+
     return () => {
+      sock.off('connect', doJoin);
       sock.emit('game:leave', { gameRoomId });
     };
   }, [gameRoomId, playerId]);

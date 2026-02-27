@@ -23,10 +23,13 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
   socket.on('game:join', async ({ gameRoomId, playerId }: { gameRoomId: string; playerId: string }) => {
     const room = await storage.loadGame(gameRoomId);
     if (!room || !room.players[playerId]) {
+      console.log(`[MTG-SERVER] game:join FAILED — room or player not found (room=${gameRoomId?.slice(0, 8)}, player=${playerId?.slice(0, 8)})`);
       socket.emit('game:error', 'Room or player not found');
       return;
     }
     socket.join(ROOM(gameRoomId));
+    const socketsInRoom = await io.in(ROOM(gameRoomId)).fetchSockets();
+    console.log(`[MTG-SERVER] game:join — player=${room.players[playerId]!.playerName} (${playerId.slice(0, 8)}), room=${ROOM(gameRoomId)}, socketId=${socket.id}, sockets in room=${socketsInRoom.length}, totalCards=${Object.keys(room.cards).length}`);
     // full sanitised state to this socket only
     socket.emit('game:state', gameService.sanitiseForPlayer(room, playerId));
     // notify others — send full player state so they can render the new opponent
@@ -35,10 +38,13 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     for (const [cid, card] of Object.entries(room.cards)) {
       if (card.controller === playerId) joiningCards[cid] = card;
     }
+    console.log(`[MTG-SERVER] emitting player_joined to others — joiningCards=${Object.keys(joiningCards).length}, turnOrder=`, room.turnOrder);
     socket.to(ROOM(gameRoomId)).emit('game:delta', {
       type: 'player_joined',
       player: joiningPlayer,
       cards: joiningCards,
+      turnOrder: room.turnOrder,
+      activePlayerIndex: room.activePlayerIndex,
     });
   });
 
@@ -75,22 +81,21 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     gameRoomId, instanceId, toZone, toIndex, playerId,
   }: { gameRoomId: string; instanceId: string; toZone: GameZone; toIndex?: number; playerId: string }) => {
     const room = await storage.loadGame(gameRoomId);
-    if (!room) return;
+    if (!room) { console.log(`[MTG-SERVER] card:zone — room not found (${gameRoomId?.slice(0, 8)})`); return; }
     const card = room.cards[instanceId];
-    if (!card) return;
+    if (!card) { console.log(`[MTG-SERVER] card:zone — card not found (${instanceId?.slice(0, 8)})`); return; }
 
     const player = room.players[card.controller];
-    if (!player) return;
+    if (!player) { console.log(`[MTG-SERVER] card:zone — controller not found (${card.controller?.slice(0, 8)})`); return; }
 
-    // remove from current zone array
-    const fromZoneKey = zoneKey(card.zone);
+    const fromZone = card.zone;
+    const fromZoneKey = zoneKey(fromZone);
     if (fromZoneKey) {
       const arr = (player as any)[fromZoneKey] as string[];
       const idx = arr.indexOf(instanceId);
       if (idx !== -1) arr.splice(idx, 1);
     }
 
-    // add to target zone array
     card.zone = toZone;
     if (toZone === 'battlefield') {
       card.tapped = false;
@@ -110,7 +115,19 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
 
     room.lastActivity = ts();
     await storage.saveGame(room);
-    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'zone_changed', instanceId, toZone, toIndex, log: room.actionLog.at(-1) });
+
+    const socketsInRoom = await io.in(ROOM(gameRoomId)).fetchSockets();
+    console.log(`[MTG-SERVER] card:zone — ${card.name} ${fromZone}→${toZone}, controller=${player.playerName} (${card.controller.slice(0, 8)}), emitting to ${ROOM(gameRoomId)} (${socketsInRoom.length} sockets)`);
+
+    io.to(ROOM(gameRoomId)).emit('game:delta', {
+      type: 'zone_changed',
+      instanceId,
+      fromZone,
+      toZone,
+      toIndex,
+      card: { ...card },
+      log: room.actionLog.at(-1),
+    });
   });
 
   // ── Tap / untap ───────────────────────────────────────────────────────────
@@ -205,12 +222,17 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
   }: { gameRoomId: string; playerId: string; delta: number }) => {
     const room = await storage.loadGame(gameRoomId);
     if (!room || !room.players[playerId]) return;
-    room.players[playerId]!.life += delta;
+    const player = room.players[playerId]!;
+    player.life += delta;
+    const sign = delta >= 0 ? '+' : '';
+    gameService.appendLog(room, playerId, 'life_change',
+      `${player.playerName}: ${player.life} life (${sign}${delta})`);
     room.lastActivity = ts();
     await storage.saveGame(room);
     io.to(ROOM(gameRoomId)).emit('game:delta', {
       type: 'life_changed', playerId,
-      life: room.players[playerId]!.life,
+      life: player.life,
+      log: room.actionLog.at(-1),
     });
   });
 
@@ -219,12 +241,19 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
   }: { gameRoomId: string; playerId: string; value: number }) => {
     const room = await storage.loadGame(gameRoomId);
     if (!room || !room.players[playerId]) return;
-    room.players[playerId]!.life = value;
+    const player = room.players[playerId]!;
+    const oldLife = player.life;
+    player.life = value;
+    const diff = value - oldLife;
+    const sign = diff >= 0 ? '+' : '';
+    gameService.appendLog(room, playerId, 'life_change',
+      `${player.playerName}: ${player.life} life (${sign}${diff})`);
     room.lastActivity = ts();
     await storage.saveGame(room);
     io.to(ROOM(gameRoomId)).emit('game:delta', {
       type: 'life_changed', playerId,
-      life: room.players[playerId]!.life,
+      life: player.life,
+      log: room.actionLog.at(-1),
     });
   });
 
@@ -306,8 +335,9 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     room.lastActivity = ts();
     await storage.saveGame(room);
 
-    // send drawn card details only to this player, backs to others
     const drawnCards = drawn.map(id => room.cards[id]!);
+    const socketsInRoom = await io.in(ROOM(gameRoomId)).fetchSockets();
+    console.log(`[MTG-SERVER] library:draw — ${player.playerName} drew ${drawn.length}, hand=${player.handCardIds.length}, lib=${player.libraryCardIds.length}, sockets in room=${socketsInRoom.length}`);
     socket.emit('game:delta', { type: 'cards_drawn', drawn: drawnCards, log: room.actionLog.at(-1) });
     socket.to(ROOM(gameRoomId)).emit('game:delta', {
       type: 'cards_drawn_other', playerId,
