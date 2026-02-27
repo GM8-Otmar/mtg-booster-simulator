@@ -290,6 +290,11 @@ export default function BattlefieldZone({
     setSelectedIds(new Set());
   }, [selectedIds, playerId, tapCard]);
 
+  // Click-to-select: replace selection with just this card (multi-select only via marquee)
+  const onSelectCard = useCallback((instanceId: string) => {
+    setSelectedIds(new Set([instanceId]));
+  }, []);
+
   const onContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
   }, []);
@@ -337,6 +342,7 @@ export default function BattlefieldZone({
             containerRef={containerRef}
             isSelected={isSelected}
             onClearSelection={() => setSelectedIds(new Set())}
+            onSelect={onSelectCard}
             selectedCards={isSelected && selectedCards && selectedCards.length > 1 ? selectedCards : undefined}
             onMultiDragStart={isSelected && selectedIds.size > 1 ? onMultiDragStart : undefined}
             multiDragPos={multiPos}

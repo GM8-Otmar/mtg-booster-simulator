@@ -146,6 +146,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   const gameRoomIdRef = useRef<string | null>(null);
   const roomRef = useRef<GameRoom | null>(null);
   const pendingLifeLogRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; startLife: number } | null>(null);
+  const pendingCounterLogRef = useRef<Record<string, { timer: ReturnType<typeof setTimeout> | null; startTotal: number; cardName: string }>>({});
   const isSandboxRef = useRef(false);
   const activeSandboxPlayerIdRef = useRef<string | null>(null);
 
@@ -371,6 +372,53 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
             return next;
           });
         }, 600);
+        return;
+      }
+
+      // ── Counter changes: apply immediately but debounce the log entry ──────
+      if (event === 'card:counter') {
+        const instanceId = (payload as any).instanceId as string;
+        // Apply state change immediately (skip log — we'll add it after debounce)
+        setRoom(prev => {
+          if (!prev) return prev;
+          return applyLocalSandboxAction(prev, event, { gameRoomId: roomId, playerId: activePid, ...payload, _skipLog: true }, activePid);
+        });
+        const pending = pendingCounterLogRef.current;
+        if (pending[instanceId]?.timer) {
+          clearTimeout(pending[instanceId].timer!);
+        }
+        if (!pending[instanceId]) {
+          const card = roomRef.current?.cards[instanceId];
+          pending[instanceId] = {
+            timer: null,
+            startTotal: card?.counters.reduce((s, c) => s + c.value, 0) ?? 0,
+            cardName: card?.name ?? 'a card',
+          };
+        }
+        pending[instanceId].timer = setTimeout(() => {
+          const currentRoom = roomRef.current;
+          const currentPid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+          if (!currentRoom || !currentPid) { delete pending[instanceId]; return; }
+          const card = currentRoom.cards[instanceId];
+          const player = currentRoom.players[currentPid];
+          if (!card || !player) { delete pending[instanceId]; return; }
+          const finalTotal = card.counters.reduce((s, c) => s + c.value, 0);
+          const startTotal = pending[instanceId]!.startTotal;
+          const totalDelta = finalTotal - startTotal;
+          if (totalDelta === 0) { delete pending[instanceId]; return; }
+          const sign = totalDelta >= 0 ? '+' : '';
+          const desc = `${player.playerName}: ${pending[instanceId]!.cardName} ${sign}${totalDelta} counter (→ ${finalTotal})`;
+          const entry: GameAction = {
+            id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: new Date().toISOString(),
+            playerId: currentPid,
+            playerName: player.playerName,
+            type: 'counter_change',
+            description: desc,
+          };
+          setRoom(prev => prev ? { ...prev, actionLog: appendLog(prev.actionLog, entry) } : prev);
+          delete pending[instanceId];
+        }, 1500);
         return;
       }
 
@@ -797,10 +845,11 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
       } else if (payload.delta !== 0) {
         counters = [...counters, { type: payload.counterType, value: payload.delta, label: payload.label }];
       }
+      const afterCounters = applyDelta(room, { type: 'counters_changed', instanceId: payload.instanceId, counters }, myPlayerId);
+      if (payload._skipLog) return afterCounters;
       const labelText = 'counter';
       const counterSign = (payload.delta as number) >= 0 ? '+' : '';
       const counterDesc = `${myName}: ${card.name} ${counterSign}${payload.delta} ${labelText}`;
-      const afterCounters = applyDelta(room, { type: 'counters_changed', instanceId: payload.instanceId, counters }, myPlayerId);
       return { ...afterCounters, actionLog: appendLog(afterCounters.actionLog, log('counter_change', counterDesc)) };
     }
 
