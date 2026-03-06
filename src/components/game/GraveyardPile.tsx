@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { BattlefieldCard, GameZone } from '../../types/game';
 import CardContextMenu from './CardContextMenu';
 import { useGameTable } from '../../contexts/GameTableContext';
+import { useCardInspector } from './CardInspectorPanel';
 
 interface GraveyardPileProps {
   cards: BattlefieldCard[];
@@ -26,6 +27,7 @@ export default function GraveyardPile({
   dropZone = 'graveyard',
 }: GraveyardPileProps) {
   const { changeZone } = useGameTable();
+  const { hoverInspect, clearHoverInspect } = useCardInspector();
   const [expanded, setExpanded] = useState(false);
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -131,6 +133,8 @@ export default function GraveyardPile({
                     e.stopPropagation();
                     setMenuInfo({ card, x: e.clientX, y: e.clientY });
                   }}
+                  onMouseEnter={() => hoverInspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId })}
+                  onMouseLeave={() => clearHoverInspect()}
                 >
                   <input
                     type="checkbox"

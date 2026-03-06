@@ -10,6 +10,9 @@
   --color-cyan-dim: #19f0ff40;
   --color-cream: #F5F3EF;
   --color-cream-muted: #a39e96;
+  
+  --shadow-neon-pink: 0 0 10px rgba(255, 46, 136, 0.4), 0 0 20px rgba(255, 46, 136, 0.2);
+  --shadow-neon-pink-lg: 0 0 15px rgba(255, 46, 136, 0.5), 0 0 30px rgba(255, 46, 136, 0.3);
 }
 
 /* Custom base styles */
@@ -25,6 +28,11 @@ body {
   min-height: 100vh;
 }
 
+/* Custom utility for extra punchy glow if needed */
+.shadow-glow-magenta {
+  box-shadow: 0 0 15px var(--brand-magenta), 0 0 5px rgba(255, 255, 255, 0.5);
+}
+
 /* Card shake animation (triggered by H key) */
 @keyframes card-shake {
   0%, 100% { translate: 0 0; }
@@ -37,4 +45,14 @@ body {
   0%   { opacity: 1; }
   20%  { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* Card drawing fly in */
+@keyframes card-fly-in {
+  from { translate: 0 100%; opacity: 0; }
+  to { translate: 0 0; opacity: 1; }
+}
+
+.animate-card-fly-in {
+  animation: card-fly-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }

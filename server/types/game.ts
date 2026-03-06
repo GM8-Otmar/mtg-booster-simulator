@@ -37,6 +37,7 @@ export interface BattlefieldCard {
 
   // is this the player's designated commander?
   isCommander: boolean;
+  revealed?: boolean;
 }
 
 export interface GamePlayerState {

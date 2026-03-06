@@ -113,8 +113,9 @@ export interface GameTableContextType {
   concede: () => void;
   sendMessage: (text: string) => void;
 
-  // dice
+  // dice & coin
   rollDice: (faces: number, result: number) => void;
+  flipCoin: (result: 'heads' | 'tails') => void;
 }
 
 // ─── Context init ──────────────────────────────────────────────────────────
@@ -655,6 +656,17 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   }, [emit, saveUndoSnapshot]);
 
   const revealCards = useCallback((instanceIds: string[]) => {
+    if (isSandboxRef.current) {
+      setRoom(prev => {
+        if (!prev) return prev;
+        const newCards = { ...prev.cards };
+        for (const id of instanceIds) {
+          if (newCards[id]) newCards[id] = { ...newCards[id]!, revealed: !newCards[id]!.revealed };
+        }
+        return { ...prev, cards: newCards };
+      });
+      return;
+    }
     emit('card:reveal', { instanceIds });
   }, [emit]);
 
@@ -793,6 +805,10 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('game:dice-roll', { faces, result });
   }, [emit]);
 
+  const flipCoin = useCallback((result: 'heads' | 'tails') => {
+    emit('game:coin-flip', { result });
+  }, [emit]);
+
   // ── Turn order ────────────────────────────────────────────────────────────
 
   const passTurn = useCallback(() => {
@@ -910,6 +926,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       targetingArrows, isTargetingMode, startTargeting, cancelTargeting, completeTargeting, dismissArrow, clearAllArrows,
       concede, sendMessage,
       rollDice,
+      flipCoin,
     }}>
       {children}
     </GameTableContext.Provider>
@@ -1128,6 +1145,11 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
     case 'game:dice-roll': {
       const diceDesc = `${myName} rolled a d${payload.faces}: ${payload.result}`;
       return { ...room, actionLog: appendLog(room.actionLog, log('dice_roll', diceDesc)) };
+    }
+
+    case 'game:coin-flip': {
+      const coinDesc = `${myName} flipped a coin: ${payload.result}`;
+      return { ...room, actionLog: appendLog(room.actionLog, log('coin_flip', coinDesc)) };
     }
 
     case 'game:pass-turn': {
