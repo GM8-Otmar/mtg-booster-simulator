@@ -181,7 +181,16 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     });
     sock.on('game:error', (msg: string) => {
       console.error('[MTG] game:error', msg);
-      setError(msg);
+      if (msg === 'Room or player not found') {
+        // Server restarted and lost game state — reset so user can start fresh
+        setRoom(null);
+        setGameRoomId(null);
+        setPlayerId(null);
+        setPlayerName(null);
+        setError('Game session expired (server restarted). Please create or join a new game.');
+      } else {
+        setError(msg);
+      }
     });
 
     // Full state snapshot (on join)
