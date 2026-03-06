@@ -33,7 +33,7 @@ router.post('/', async (req: Request, res: Response) => {
  */
 router.get('/:code', async (req: Request, res: Response) => {
   try {
-    const { code } = req.params;
+    const { code } = req.params as Record<string, string>;
     const event = await eventService.getEventByCode(code);
 
     if (!event) {
@@ -52,7 +52,7 @@ router.get('/:code', async (req: Request, res: Response) => {
  */
 router.post('/:eventId/join', async (req: Request, res: Response) => {
   try {
-    const { eventId } = req.params;
+    const { eventId } = req.params as Record<string, string>;
     const request: JoinEventRequest = req.body;
 
     if (!request.playerName) {
@@ -88,7 +88,7 @@ router.post('/:eventId/join', async (req: Request, res: Response) => {
  */
 router.post('/:eventId/start', async (req: Request, res: Response) => {
   try {
-    const { eventId } = req.params;
+    const { eventId } = req.params as Record<string, string>;
     const { playerId } = req.body;
 
     if (!playerId) {
@@ -110,7 +110,7 @@ router.post('/:eventId/start', async (req: Request, res: Response) => {
  */
 router.post('/:eventId/next-pack', async (req: Request, res: Response) => {
   try {
-    const { eventId } = req.params;
+    const { eventId } = req.params as Record<string, string>;
     const { playerId } = req.body;
 
     if (!playerId) {
@@ -130,7 +130,7 @@ router.post('/:eventId/next-pack', async (req: Request, res: Response) => {
  */
 router.post('/:eventId/select-legend', async (req: Request, res: Response) => {
   try {
-    const { eventId } = req.params;
+    const { eventId } = req.params as Record<string, string>;
     const { playerId, legendCard }: { playerId: string; legendCard: any } = req.body;
 
     if (!playerId || !legendCard) {
@@ -150,7 +150,7 @@ router.post('/:eventId/select-legend', async (req: Request, res: Response) => {
  */
 router.get('/:eventId/pool', async (req: Request, res: Response) => {
   try {
-    const { eventId } = req.params;
+    const { eventId } = req.params as Record<string, string>;
     const { playerId } = req.query;
 
     if (!playerId || typeof playerId !== 'string') {
@@ -170,7 +170,7 @@ router.get('/:eventId/pool', async (req: Request, res: Response) => {
  */
 router.get('/sets/:setCode/legends', async (req: Request, res: Response) => {
   try {
-    const { setCode } = req.params;
+    const { setCode } = req.params as Record<string, string>;
     const query = `set:${setCode} t:legendary t:creature`;
 
     const response = await axios.get('https://api.scryfall.com/cards/search', {

@@ -23,7 +23,7 @@ router.post('/', async (req: Request, res: Response) => {
 /** GET /api/games/:code — find by code */
 router.get('/:code', async (req: Request, res: Response) => {
   try {
-    const room = await storage.loadGameByCode(req.params.code!);
+    const room = await storage.loadGameByCode(req.params.code as string);
     if (!room) return res.status(404).json({ error: 'Game not found' });
     res.json({ room });
   } catch (err) {
@@ -38,8 +38,8 @@ router.post('/:gameId/join', async (req: Request, res: Response) => {
     if (!playerName) return res.status(400).json({ error: 'playerName is required' });
 
     // accept either gameId or 6-char code in the param
-    let room = await storage.loadGame(req.params.gameId!);
-    if (!room) room = await storage.loadGameByCode(req.params.gameId!);
+    let room = await storage.loadGame(req.params.gameId as string);
+    if (!room) room = await storage.loadGameByCode(req.params.gameId as string);
     if (!room) return res.status(404).json({ error: 'Game not found' });
 
     const result = await gameService.joinGame(room.code, playerName);
@@ -55,7 +55,7 @@ router.post('/:gameId/import-deck', async (req: Request, res: Response) => {
   try {
     const { playerId, deck }: { playerId: string; deck: ParsedDeck } = req.body;
     if (!playerId || !deck) return res.status(400).json({ error: 'playerId and deck required' });
-    const room = await gameService.importDeck(req.params.gameId!, playerId, deck);
+    const room = await gameService.importDeck(req.params.gameId as string, playerId, deck);
     const joiningPlayer = room.players[playerId]!;
     const joiningCards: Record<string, (typeof room.cards)[string]> = {};
     for (const [cid, card] of Object.entries(room.cards)) {

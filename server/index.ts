@@ -70,7 +70,7 @@ setInterval(async () => {
 }, 60 * 60 * 1000);
 
 // Start server (listen on all network interfaces)
-httpServer.listen(PORT, '0.0.0.0', () => {
+httpServer.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`🚀 MTG Sealed Event Server running on port ${PORT}`);
   console.log(`   - API: http://localhost:${PORT}/api`);
   console.log(`   - WebSocket: ws://localhost:${PORT}`);
