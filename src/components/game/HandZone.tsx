@@ -11,7 +11,7 @@ interface HandZoneProps {
 function HandCard({
   card, i, total, fanAngle, startAngle,
   isSelected,
-  onContextMenu, onPlayToBattlefield, onSendToZone, onToggleSelect,
+  onContextMenu, onPlayToBattlefield, onSendToZone, onToggleSelect, onReorder,
 }: {
   card: BattlefieldCard;
   i: number;
@@ -23,6 +23,7 @@ function HandCard({
   onPlayToBattlefield: (instanceId: string, clientX: number, clientY: number) => void;
   onSendToZone: (instanceId: string, zone: string) => void;
   onToggleSelect: (instanceId: string) => void;
+  onReorder?: (instanceId: string, clientX: number) => void;
 }) {
   const { inspect } = useCardInspector();
   const angle = startAngle + i * fanAngle;
@@ -72,6 +73,10 @@ function HandCard({
         const dy = startY.current - e.clientY;
         if (dy > 60) {
           onPlayToBattlefield(card.instanceId, e.clientX, e.clientY);
+        } else if (onReorder) {
+          // If dropped in the hand zone (or nearby) without playing it, trigger reorder
+          // We can use the drop X coordinate to determine its new place in the hand
+          onReorder(card.instanceId, e.clientX);
         }
       }
       setIsDragging(false);
@@ -93,7 +98,7 @@ function HandCard({
       window.removeEventListener('pointercancel', onCancel);
       clearHighlights();
     };
-  }, [isDragging, card.instanceId, onPlayToBattlefield, onSendToZone]);
+  }, [isDragging, card.instanceId, onPlayToBattlefield, onSendToZone, onReorder]);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button === 2) return;
@@ -223,7 +228,7 @@ function HandCard({
 }
 
 export default function HandZone({ cards }: HandZoneProps) {
-  const { changeZone, moveCard } = useGameTable();
+  const { changeZone, moveCard, reorderHand } = useGameTable();
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -288,6 +293,34 @@ export default function HandZone({ cards }: HandZoneProps) {
     setSelectedIds(new Set());
   }, [changeZone, moveCard, selectedIds]);
 
+  const handleReorder = useCallback((instanceId: string, clientX: number) => {
+    const handZone = document.querySelector('[data-drop-zone="hand"]') as HTMLElement | null;
+    if (!handZone) return;
+
+    const rect = handZone.getBoundingClientRect();
+    // Cards are fanned around the center of the hand zone.
+    // Card offsetX: (i - (total - 1) / 2) * 36
+    // Center of hand zone is roughly rect.left + rect.width / 2.
+    const centerX = rect.left + rect.width / 2;
+    // Calculate the drop index based on the mouse clientX relative to center
+    const xOffsetFromCenter = clientX - centerX;
+    
+    // Each card is separated by ~36px
+    let newIndex = Math.round(xOffsetFromCenter / 36 + (total - 1) / 2);
+    
+    // Clamp to valid indices
+    newIndex = Math.max(0, Math.min(newIndex, total - 1));
+
+    const currentIndex = cards.findIndex(c => c.instanceId === instanceId);
+    if (currentIndex === -1 || currentIndex === newIndex) return; // No change
+
+    const newHandIds = cards.map(c => c.instanceId);
+    newHandIds.splice(currentIndex, 1);
+    newHandIds.splice(newIndex, 0, instanceId);
+
+    reorderHand(newHandIds);
+  }, [cards, total, reorderHand]);
+
   const hasSelection = selectedIds.size > 0;
   const selectedCards = hasSelection ? cards.filter(c => selectedIds.has(c.instanceId)) : undefined;
 
@@ -335,6 +368,7 @@ export default function HandZone({ cards }: HandZoneProps) {
             }}
             onPlayToBattlefield={handlePlayToBattlefield}
             onSendToZone={handleSendToZone}
+            onReorder={handleReorder}
           />
         ))}
       </div>

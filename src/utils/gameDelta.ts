@@ -230,6 +230,18 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       };
     }
 
+    case 'hand_reordered': {
+      const player = room.players[delta.playerId];
+      if (!player) return room;
+      return {
+        ...room,
+        players: {
+          ...room.players,
+          [delta.playerId]: { ...player, handCardIds: delta.handCardIds },
+        },
+      };
+    }
+
     case 'library_shuffled':
     case 'scry_resolved':
     case 'player_conceded':
