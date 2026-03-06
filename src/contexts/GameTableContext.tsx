@@ -62,6 +62,7 @@ export interface GameTableContextType {
   // game actions
   moveCard: (instanceId: string, x: number, y: number, persist: boolean) => void;
   changeZone: (instanceId: string, toZone: GameZone, toIndex?: number) => void;
+  reorderHand: (newHandCardIds: string[]) => void;
   /** Move multiple cards to a zone at once (avoids batching issues) */
   bulkChangeZone: (instanceIds: string[], toZone: GameZone, toIndex?: number) => void;
   tapCard: (instanceId: string, tapped: boolean) => void;
@@ -513,6 +514,28 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('card:zone', { instanceId, toZone, toIndex });
   }, [emit, saveUndoSnapshot]);
 
+  const reorderHand = useCallback((newHandCardIds: string[]) => {
+    saveUndoSnapshot();
+    if (isSandboxRef.current) {
+      const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+      if (!activePid) return;
+      setRoom(prev => {
+        if (!prev) return prev;
+        const player = prev.players[activePid];
+        if (!player) return prev;
+        return {
+          ...prev,
+          players: {
+            ...prev.players,
+            [activePid]: { ...player, handCardIds: newHandCardIds },
+          },
+        };
+      });
+      return;
+    }
+    emit('hand:reorder', { handCardIds: newHandCardIds });
+  }, [emit, saveUndoSnapshot]);
+
   const bulkChangeZone = useCallback((instanceIds: string[], toZone: GameZone, toIndex?: number) => {
     if (instanceIds.length === 0) return;
     saveUndoSnapshot();
@@ -879,7 +902,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       myGraveyardCards, myExileCards, myCommandZoneCards,
       createGame, joinGame, importDeck, leaveGame, loadSandbox, isSandbox,
       activeSandboxPlayerId, setActiveSandboxPlayer,
-      moveCard, changeZone, bulkChangeZone, tapCard, bulkTapCards, tapAll, untapAll, setFaceDown, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
+      moveCard, changeZone, reorderHand, bulkChangeZone, tapCard, bulkTapCards, tapAll, untapAll, setFaceDown, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
       adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast,
       drawCards, shuffleLibrary, scry, resolveScry, mulligan,
       createToken,

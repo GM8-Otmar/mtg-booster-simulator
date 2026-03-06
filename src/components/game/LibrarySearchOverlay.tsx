@@ -104,7 +104,7 @@ export default function LibrarySearchOverlay({ onClose }: LibrarySearchOverlayPr
       onClick={onClose}
     >
       <div
-        className="bg-navy border border-cyan-dim rounded-2xl shadow-2xl w-96 max-h-[80vh] flex flex-col overflow-hidden"
+        className="bg-navy border border-cyan-dim rounded-2xl shadow-2xl w-96 h-[70vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -140,8 +140,8 @@ export default function LibrarySearchOverlay({ onClose }: LibrarySearchOverlayPr
           </p>
         </div>
 
-        {/* Results */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Results — fixed height, always scrollable */}
+        <div className="flex-1 overflow-y-scroll min-h-0">
           {libraryCards.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-2">
               <p className="text-cream-muted/40 text-sm">No cards match</p>

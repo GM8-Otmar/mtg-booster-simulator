@@ -195,6 +195,33 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     });
   });
 
+  // ── Hand reordering ───────────────────────────────────────────────────────
+
+  socket.on('hand:reorder', async ({
+    gameRoomId, playerId, handCardIds,
+  }: { gameRoomId: string; playerId: string; handCardIds: string[] }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room) return;
+    const player = room.players[playerId];
+    if (!player) return;
+
+    // Validate that the new array contains the same elements
+    const currentSet = new Set(player.handCardIds);
+    const newSet = new Set(handCardIds);
+    if (currentSet.size !== newSet.size || [...currentSet].some(id => !newSet.has(id))) {
+      return; // Invalid reorder (e.g., trying to add/remove cards)
+    }
+
+    player.handCardIds = handCardIds;
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', {
+      type: 'hand_reordered',
+      playerId,
+      handCardIds,
+    });
+  });
+
   // ── Tap / untap ───────────────────────────────────────────────────────────
 
   socket.on('card:tap', async ({
