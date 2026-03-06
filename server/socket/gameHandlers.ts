@@ -290,6 +290,24 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'card_facedown', instanceId, faceDown });
   });
 
+  // ── Transform (DFC flip) ────────────────────────────────────────────────
+
+  socket.on('card:transform', async ({
+    gameRoomId, instanceId, playerId,
+  }: { gameRoomId: string; instanceId: string; playerId: string }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !room.cards[instanceId]) return;
+    if (room.cards[instanceId]!.controller !== playerId) return;
+    room.cards[instanceId]!.flipped = !room.cards[instanceId]!.flipped;
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', {
+      type: 'card_transform',
+      instanceId,
+      flipped: room.cards[instanceId]!.flipped,
+    });
+  });
+
   // ── Counters ──────────────────────────────────────────────────────────────
 
   socket.on('card:counter', async ({

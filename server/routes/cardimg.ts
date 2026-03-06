@@ -23,7 +23,8 @@ router.get('/:scryfallId', (req, res) => {
     return;
   }
 
-  const cacheKey = `${scryfallId}:${size}`;
+  const face = (req.query.face as string) === 'back' ? 'back' : 'front';
+  const cacheKey = `${scryfallId}:${size}:${face}`;
   if (cache.has(cacheKey)) {
     res.set('Content-Type', 'image/jpeg');
     res.set('Cache-Control', 'public, max-age=604800'); // 7 days
@@ -31,9 +32,9 @@ router.get('/:scryfallId', (req, res) => {
     return;
   }
 
-  // Build Scryfall CDN URL from UUID
+  // Build Scryfall CDN URL from UUID (front or back face)
   const id = scryfallId;
-  const url = `https://cards.scryfall.io/${size}/front/${id[0]}/${id[1]}/${id}.jpg`;
+  const url = `https://cards.scryfall.io/${size}/${face}/${id[0]}/${id[1]}/${id}.jpg`;
 
   const protocol = url.startsWith('https') ? https : http;
   const request = protocol.get(url, {

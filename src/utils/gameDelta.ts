@@ -111,6 +111,15 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       };
     }
 
+    case 'card_transform': {
+      const card = room.cards[delta.instanceId];
+      if (!card) return room;
+      return {
+        ...room,
+        cards: { ...room.cards, [delta.instanceId]: { ...card, flipped: delta.flipped } },
+      };
+    }
+
     case 'counters_changed': {
       const card = room.cards[delta.instanceId];
       if (!card) return room;

@@ -21,6 +21,8 @@ export interface BattlefieldCard {
   scryfallId: string;       // Scryfall card id; 'token' for tokens
   name: string;             // denormalised
   imageUri: string | null;  // front-face normal image, denormalised
+  backImageUri?: string | null;   // back face image for DFCs (transform / modal)
+  backName?: string | null;        // back face name for DFCs
 
   zone: GameZone;
   controller: string;       // playerId

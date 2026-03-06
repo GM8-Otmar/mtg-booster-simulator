@@ -26,6 +26,8 @@ export interface BattlefieldCard {
   scryfallId: string;
   name: string;
   imageUri: string | null;
+  backImageUri?: string | null;   // back face image for DFCs (transform / modal)
+  backName?: string | null;        // back face name for DFCs
 
   zone: GameZone;
   controller: string;

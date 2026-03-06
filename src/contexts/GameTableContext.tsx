@@ -70,6 +70,7 @@ export interface GameTableContextType {
   tapAll: (filter?: 'all' | 'lands') => void;
   untapAll: () => void;
   setFaceDown: (instanceId: string, faceDown: boolean) => void;
+  transformCard: (instanceId: string) => void;
   addCounter: (instanceId: string, counterType: string, delta: number, label?: string) => void;
   /** Apply a counter change to multiple cards at once (avoids batching issues) */
   bulkAddCounter: (instanceIds: string[], counterType: string, delta: number, label?: string) => void;
@@ -604,6 +605,10 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('card:facedown', { instanceId, faceDown });
   }, [emit]);
 
+  const transformCard = useCallback((instanceId: string) => {
+    emit('card:transform', { instanceId });
+  }, [emit]);
+
   const addCounter = useCallback((instanceId: string, counterType: string, delta: number, label?: string) => {
     saveUndoSnapshot();
     emit('card:counter', { instanceId, counterType, delta, label });
@@ -918,7 +923,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       myGraveyardCards, myExileCards, myCommandZoneCards,
       createGame, joinGame, importDeck, leaveGame, loadSandbox, isSandbox,
       activeSandboxPlayerId, setActiveSandboxPlayer,
-      moveCard, changeZone, reorderHand, bulkChangeZone, tapCard, bulkTapCards, tapAll, untapAll, setFaceDown, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
+      moveCard, changeZone, reorderHand, bulkChangeZone, tapCard, bulkTapCards, tapAll, untapAll, setFaceDown, transformCard, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
       adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast,
       drawCards, shuffleLibrary, scry, resolveScry, mulligan,
       createToken,
@@ -1014,6 +1019,9 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
 
     case 'card:facedown':
       return applyDelta(room, { type: 'card_facedown', instanceId: payload.instanceId, faceDown: payload.faceDown }, myPlayerId);
+
+    case 'card:transform':
+      return applyDelta(room, { type: 'card_transform', instanceId: payload.instanceId, flipped: payload.flipped }, myPlayerId);
 
     case 'card:counter': {
       const card = room.cards[payload.instanceId];

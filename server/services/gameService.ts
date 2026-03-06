@@ -90,11 +90,19 @@ export async function joinGame(
 
 // ── Deck import ──────────────────────────────────────────────────────────────
 
+/** Resolved card info returned by resolveNames. */
+interface ResolvedCard {
+  scryfallId: string;
+  imageUri: string | null;
+  backImageUri?: string | null;
+  backName?: string | null;
+}
+
 /** Resolve card names via Scryfall /cards/collection (up to 75 per call). */
 async function resolveNames(
   entries: { name: string; count: number }[],
-): Promise<Map<string, { scryfallId: string; imageUri: string | null }>> {
-  const result = new Map<string, { scryfallId: string; imageUri: string | null }>();
+): Promise<Map<string, ResolvedCard>> {
+  const result = new Map<string, ResolvedCard>();
   const unique = [...new Set(entries.map(e => e.name))];
 
   for (let i = 0; i < unique.length; i += 75) {
@@ -105,7 +113,16 @@ async function resolveNames(
         const imageUri = card.id
           ? `/api/cardimg/${card.id}`
           : (card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null);
-        result.set(card.name.toLowerCase(), { scryfallId: card.id, imageUri });
+        // DFC back face: check if card has two faces
+        const hasDFC = card.card_faces && card.card_faces.length >= 2;
+        const backImageUri = hasDFC && card.id ? `/api/cardimg/${card.id}?face=back` : null;
+        const backName = hasDFC ? card.card_faces[1].name : null;
+        const resolved: ResolvedCard = { scryfallId: card.id, imageUri, backImageUri, backName };
+        result.set(card.name.toLowerCase(), resolved);
+        // DFCs: Scryfall returns "Front // Back" but deck lists use just the front name
+        if (hasDFC && card.card_faces[0]?.name) {
+          result.set(card.card_faces[0].name.toLowerCase(), resolved);
+        }
       }
     } catch { /* partial failure — cards not found get null imageUri */ }
     if (i + 75 < unique.length) await new Promise(r => setTimeout(r, 100));
@@ -118,7 +135,7 @@ export async function importDeck(
   playerId: string,
   deck: ParsedDeck,
   /** Pass pre-resolved cards (from sealed pool) to skip Scryfall lookup */
-  resolvedCards?: Map<string, { scryfallId: string; imageUri: string | null }>,
+  resolvedCards?: Map<string, ResolvedCard>,
 ): Promise<GameRoom> {
   const room = await storage.loadGame(roomId);
   if (!room) throw new Error('Game not found');
@@ -157,6 +174,8 @@ export async function importDeck(
       scryfallId: info.scryfallId,
       name,
       imageUri: info.imageUri,
+      backImageUri: info.backImageUri ?? null,
+      backName: info.backName ?? null,
       zone,
       controller: playerId,
       x: 10 + Math.random() * 60,
