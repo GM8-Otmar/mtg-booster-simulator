@@ -61,6 +61,10 @@ export default function BattlefieldCard({
   const isOwner = card.controller === playerId;
   const isFaceDown = card.faceDown;
 
+  // DFC: show back face image/name when transformed
+  const displayImage = card.flipped && card.backImageUri ? card.backImageUri : card.imageUri;
+  const displayName = card.flipped && card.backName ? card.backName : card.name;
+
   // During multi-drag the zone controls position; otherwise self-managed
   const [visualPos, setVisualPos] = useState({ x: card.x, y: card.y });
   const effectivePos = multiDragPos ?? visualPos;
@@ -196,7 +200,7 @@ export default function BattlefieldCard({
         if (!onMultiDragStartRef.current) {
           onSelectRef.current?.(card.instanceId);
         }
-        inspect({ name: card.name, imageUri: isFaceDown ? null : card.imageUri, instanceId: card.instanceId });
+        inspect({ name: displayName, imageUri: isFaceDown ? null : displayImage, instanceId: card.instanceId, backImageUri: card.backImageUri, backName: card.backName });
       }
 
       draggingRef.current = false;
@@ -214,7 +218,7 @@ export default function BattlefieldCard({
       window.removeEventListener('pointercancel', onUp);
       clearZoneHighlights();
     };
-  }, [isPressed, card.instanceId, card.name, card.imageUri, isFaceDown, containerRef, moveCard, changeZone, inspect]);
+  }, [isPressed, card.instanceId, displayName, displayImage, isFaceDown, containerRef, moveCard, changeZone, inspect, card.backImageUri, card.backName]);
 
   // ── Double-click: tap/untap (selection-aware) ───────────────────────────
 
@@ -279,6 +283,7 @@ export default function BattlefieldCard({
 
       <div
         className="absolute select-none"
+        data-instance-id={card.instanceId}
         style={{
           ...pctToStyle(effectivePos.x, effectivePos.y),
           width: CARD_W_PX,
@@ -297,7 +302,7 @@ export default function BattlefieldCard({
         onContextMenu={onContextMenu}
         onMouseEnter={() => {
           if (!isDragging && !isPressed) {
-            hoverInspect({ name: card.name, imageUri: isFaceDown ? null : card.imageUri, instanceId: card.instanceId });
+            hoverInspect({ name: displayName, imageUri: isFaceDown ? null : displayImage, instanceId: card.instanceId, backImageUri: card.backImageUri, backName: card.backName });
           }
         }}
         onMouseLeave={() => clearHoverInspect()}
@@ -307,17 +312,17 @@ export default function BattlefieldCard({
             <div className="w-full h-full bg-gradient-to-br from-navy-light to-navy flex items-center justify-center rounded-lg">
               <span className="text-2xl opacity-30">🃏</span>
             </div>
-          ) : card.imageUri ? (
+          ) : displayImage ? (
             <img
-              src={card.imageUri}
-              alt={card.name}
+              src={displayImage}
+              alt={displayName}
               className="w-full h-full object-cover pointer-events-none"
               draggable={false}
               onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
           ) : (
             <div className="w-full h-full bg-navy-light flex items-center justify-center p-1">
-              <span className="text-[9px] text-cream text-center leading-tight">{card.name}</span>
+              <span className="text-[9px] text-cream text-center leading-tight">{displayName}</span>
             </div>
           )}
         </div>

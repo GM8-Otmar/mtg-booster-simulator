@@ -25,7 +25,7 @@ interface MenuItem {
 
 export default function CardContextMenu({ card, x, y, onClose, selectedCards }: CardContextMenuProps) {
   const {
-    changeZone, bulkChangeZone, tapCard, bulkTapCards, setFaceDown,
+    changeZone, bulkChangeZone, tapCard, bulkTapCards, setFaceDown, transformCard,
     addCounter, bulkAddCounter, resetCounters, notifyCommanderCast,
     createToken, revealCards, startTargeting, effectivePlayerId: playerId,
   } = useGameTable();
@@ -167,6 +167,10 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
             label: card.faceDown ? 'Turn Face Up' : 'Turn Face Down',
             action: () => do_(() => setFaceDown(card.instanceId, !card.faceDown)),
           },
+          ...(card.backImageUri ? [{
+            label: card.flipped ? 'Transform (front)' : 'Transform (back)',
+            action: () => do_(() => transformCard(card.instanceId)),
+          }] : []),
         ],
       });
     }

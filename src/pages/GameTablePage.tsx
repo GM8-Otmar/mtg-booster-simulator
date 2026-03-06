@@ -12,6 +12,8 @@ import ZoneCountHUD from '../components/game/ZoneCountHUD';
 import BottomBar from '../components/game/BottomBar';
 import CardHoverInspector from '../components/game/CardHoverInspector';
 import LibrarySearchOverlay from '../components/game/LibrarySearchOverlay';
+import TargetingOverlay from '../components/game/TargetingOverlay';
+import OpponentInfoPanel from '../components/game/OpponentInfoPanel';
 import type { BattlefieldCard } from '../types/game';
 import { CardInspectorProvider } from '../components/game/CardInspectorPanel';
 
@@ -191,6 +193,9 @@ export default function GameTablePage() {
         {/* ── Floating controls (top-left overlay) ─────────────────────── */}
         <GameControls onConcede={handleConcede} />
 
+        {/* ── Opponent info panel (top-right overlay) ──────────────────── */}
+        <OpponentInfoPanel />
+
         {/* ── Center ──────────────────────────────────────────────────── */}
         {useGrid ? (
           /* ── Grid mode (1+ opponents) ───────────────────────────── */
@@ -299,6 +304,9 @@ export default function GameTablePage() {
           </div>
         )}
       </div>
+
+      {/* ── Targeting arrows — full-viewport overlay ──────────────────── */}
+      <TargetingOverlay />
 
       {/* ── Floating hover inspector — top-right ─────────────────────── */}
       <CardHoverInspector />

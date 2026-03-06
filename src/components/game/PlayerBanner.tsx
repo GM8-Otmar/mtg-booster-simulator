@@ -21,6 +21,7 @@ export default function PlayerBanner({ player, isCurrentPlayer = false, compact 
   return (
     <div className="flex items-center gap-3 px-3 py-1.5 bg-navy-light/60 border-b border-cyan-dim/30 shrink-0">
       <span
+        data-player-id={player.playerId}
         className={`text-xs font-bold truncate ${isCurrentPlayer ? 'text-cyan' : 'text-cream'} ${isTargetingMode ? 'cursor-crosshair hover:text-red-300 transition-colors' : ''}`}
         onClick={isTargetingMode ? () => completeTargeting(player.playerId) : undefined}
       >

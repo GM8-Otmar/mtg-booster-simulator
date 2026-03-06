@@ -10,6 +10,8 @@ interface InspectedCard {
   name: string;
   imageUri: string | null;
   instanceId: string;
+  backImageUri?: string | null;
+  backName?: string | null;
 }
 
 interface InspectorCtx {

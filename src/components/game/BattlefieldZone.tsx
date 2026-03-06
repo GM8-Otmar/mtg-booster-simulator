@@ -38,7 +38,7 @@ export default function BattlefieldZone({
 }: BattlefieldZoneProps) {
   const {
     bulkTapCards, bulkChangeZone, moveCard, effectivePlayerId: playerId,
-    targetingArrows, isTargetingMode, cancelTargeting, dismissArrow,
+    isTargetingMode, cancelTargeting,
     shakeCards,
   } = useGameTable();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -396,51 +396,10 @@ export default function BattlefieldZone({
         </div>
       )}
 
-      {/* ── Targeting arrows SVG overlay ──────────────────────────────── */}
-      {targetingArrows.length > 0 && (
-        <svg className="absolute inset-0 z-[100] pointer-events-none" style={{ width: '100%', height: '100%' }}>
-          <defs>
-            <marker
-              id="arrow-tip"
-              viewBox="0 0 10 10"
-              refX="8"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 Z" fill="rgba(239, 68, 68, 0.85)" />
-            </marker>
-          </defs>
-          {targetingArrows.map(arrow => {
-            const fromCard = cards.find(c => c.instanceId === arrow.fromId);
-            const toCard = cards.find(c => c.instanceId === arrow.toId);
-            if (!fromCard || !toCard) return null;
-            return (
-              <line
-                key={arrow.id}
-                x1={`${fromCard.x}%`}
-                y1={`${fromCard.y}%`}
-                x2={`${toCard.x}%`}
-                y2={`${toCard.y}%`}
-                stroke="rgba(239, 68, 68, 0.7)"
-                strokeWidth="3"
-                strokeLinecap="round"
-                markerEnd="url(#arrow-tip)"
-                style={{
-                  pointerEvents: 'stroke',
-                  cursor: 'pointer',
-                  animation: 'arrow-fade 5s ease-out forwards',
-                }}
-                onClick={() => dismissArrow(arrow.id)}
-              />
-            );
-          })}
-        </svg>
-      )}
+      {/* Targeting arrows are rendered by TargetingOverlay at page level */}
 
       {/* ── Targeting mode indicator bar ──────────────────────────────── */}
-      {isTargetingMode && (
+      {isTargetingMode && isOwnBattlefield && (
         <div
           className="absolute bottom-0 inset-x-0 z-[300] flex items-center justify-center gap-3 py-2 bg-red-900/80 border-t border-red-500/50 pointer-events-auto"
           onPointerDown={e => e.stopPropagation()}

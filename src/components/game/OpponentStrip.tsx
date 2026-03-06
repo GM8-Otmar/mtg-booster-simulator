@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Heart } from 'lucide-react';
 import type { GamePlayerState } from '../../types/game';
+import { useGameTable } from '../../contexts/GameTableContext';
 import OpponentZoneInspectModal from './OpponentZoneInspectModal';
 
 interface OpponentStripProps {
@@ -9,6 +10,7 @@ interface OpponentStripProps {
 
 /** Minimal strip for opponents: name (right-click for GY/exile inspect), life, poison. Tooltip shows hand/lib/gy/exile counts. */
 export default function OpponentStrip({ player }: OpponentStripProps) {
+  const { isTargetingMode, completeTargeting } = useGameTable();
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [inspectZone, setInspectZone] = useState<'graveyard' | 'exile' | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -36,10 +38,12 @@ export default function OpponentStrip({ player }: OpponentStripProps) {
         title={tooltip}
       >
         <span
-          className="text-xs font-bold truncate text-cream cursor-context-menu select-none"
+          data-player-id={player.playerId}
+          className={`text-xs font-bold truncate text-cream select-none ${isTargetingMode ? 'cursor-crosshair hover:text-red-300 transition-colors' : 'cursor-context-menu'}`}
+          onClick={isTargetingMode ? () => completeTargeting(player.playerId) : undefined}
           onContextMenu={e => {
             e.preventDefault();
-            setMenuPos({ x: e.clientX, y: e.clientY });
+            if (!isTargetingMode) setMenuPos({ x: e.clientX, y: e.clientY });
           }}
         >
           {player.playerName}
