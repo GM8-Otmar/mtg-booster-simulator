@@ -185,7 +185,7 @@ function HandCard({
         onContextMenu={onContextMenu}
         onDragStart={e => e.preventDefault()}
       >
-        <div className={`w-full h-full rounded-lg overflow-hidden border-2 shadow-lg ${isSelected ? 'border-cyan' : 'border-cyan/50'}`}>
+        <div className={`w-full h-full rounded-lg overflow-hidden border-2 shadow-neon-pink ${isSelected ? 'border-cyan' : 'border-cyan/50'}`}>
           {card.imageUri ? (
             <img
               src={card.imageUri}
@@ -229,7 +229,7 @@ function HandCard({
           className="fixed pointer-events-none z-[8000]"
           style={{ left: dragPos.x - 40, top: dragPos.y - 56, width: 80, height: 112 }}
         >
-          <div className="w-full h-full rounded-lg overflow-hidden border-2 border-cyan shadow-2xl scale-110">
+          <div className="w-full h-full rounded-lg overflow-hidden border-2 border-cyan shadow-neon-pink-lg scale-110">
             {card.imageUri ? (
               <img
                 src={card.imageUri!}

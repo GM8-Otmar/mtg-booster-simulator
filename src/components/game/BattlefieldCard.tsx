@@ -289,7 +289,7 @@ export default function BattlefieldCard({
           transition: effectiveDragging ? 'none' : 'transform 0.15s ease',
           zIndex: effectiveDragging ? 50 : isShaking ? 40 : 10,
           cursor: isTargetingMode ? 'crosshair' : effectiveDragging ? 'grabbing' : 'grab',
-          boxShadow: effectiveDragging ? '0 8px 24px rgba(0,0,0,0.65)' : undefined,
+          boxShadow: effectiveDragging ? '0 0 20px rgba(255, 46, 136, 0.8)' : undefined,
           animation: isShaking ? 'card-shake 0.1s ease-in-out 6' : undefined,
         }}
         onPointerDown={onPointerDown}
@@ -302,7 +302,7 @@ export default function BattlefieldCard({
         }}
         onMouseLeave={() => clearHoverInspect()}
       >
-        <div className={`w-full h-full rounded-lg overflow-hidden border-2 ${borderColor} shadow-lg`}>
+        <div className={`w-full h-full rounded-lg overflow-hidden border-2 ${borderColor} shadow-neon-pink`}>
           {isFaceDown ? (
             <div className="w-full h-full bg-gradient-to-br from-navy-light to-navy flex items-center justify-center rounded-lg">
               <span className="text-2xl opacity-30">🃏</span>
