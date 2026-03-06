@@ -21,7 +21,6 @@ export default function GameTablePage() {
     myPlayer, myHandCards, myBattlefieldCards,
     myGraveyardCards, myExileCards, myCommandZoneCards,
     scryCards, scryInstanceIds, scryMode,
-    canUndo, undo,
     untapAll, drawCards, mulligan, shuffleLibrary,
     concede, connected, gameRoomId, isSandbox,
     activeSandboxPlayerId, setActiveSandboxPlayer,
@@ -40,11 +39,6 @@ export default function GameTablePage() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if ((scryCards?.length ?? 0) > 0) return;
 
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        if (canUndo) undo();
-        return;
-      }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       if (e.key === 'x') {
@@ -69,7 +63,7 @@ export default function GameTablePage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [atTable, canUndo, undo, untapAll, drawCards, mulligan, shuffleLibrary, scryCards?.length ?? 0, isMyTurn, passTurn]);
+  }, [atTable, untapAll, drawCards, mulligan, shuffleLibrary, scryCards?.length ?? 0, isMyTurn, passTurn]);
 
   // ── Ding sound when it becomes your turn ─────────────────────────────────
   const prevIsMyTurnRef = useRef(false);
@@ -308,23 +302,6 @@ export default function GameTablePage() {
 
       {/* ── Floating hover inspector — top-right ─────────────────────── */}
       <CardHoverInspector />
-
-      {/* ── Undo button ──────────────────────────────────────────────── */}
-      {isSandbox && (
-        <button
-          onClick={undo}
-          disabled={!canUndo}
-          className={`fixed bottom-44 right-56 z-30 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all shadow-lg ${
-            canUndo
-              ? 'bg-navy-light border-cyan-dim/50 text-cream hover:border-cyan hover:text-cyan'
-              : 'bg-navy-light/50 border-cyan-dim/20 text-cream-muted/30 cursor-not-allowed'
-          }`}
-          title="Undo last action (Ctrl+Z)"
-        >
-          <span className="text-sm leading-none">↩</span>
-          Undo
-        </button>
-      )}
 
       {/* ── Scry / Surveil overlay ─────────────────────────────────────── */}
       {(scryCards?.length ?? 0) > 0 && (

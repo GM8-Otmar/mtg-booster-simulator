@@ -1,8 +1,9 @@
 /**
- * GameControls — collapsible floating icon menu (top-left).
- * Click the `›` chevron to expand; each icon has a tooltip.
+ * GameControls — always-visible icon sidebar (top-left).
+ * Icons are always shown. The EXPAND button slides out text labels.
+ * Custom modern tooltips appear on hover when collapsed.
  */
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ChevronRight, ArrowRight, CreditCard, Layers,
   RefreshCw, ToggleRight, ToggleLeft, Dices,
@@ -17,6 +18,69 @@ import type { TokenTemplate } from '../../types/game';
 
 interface GameControlsProps {
   onConcede: () => void;
+}
+
+/* ── Inline Tooltip Component ──────────────────────────────────────────── */
+function SidebarTooltip({ label, show }: { label: string; show: boolean }) {
+  if (!show) return null;
+  return (
+    <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 z-[200] pointer-events-none
+                    opacity-0 group-hover:opacity-100 transition-all duration-150 delay-100
+                    whitespace-nowrap">
+      {/* Left-pointing triangle */}
+      <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-0 h-0
+                      border-t-[5px] border-t-transparent
+                      border-r-[6px] border-r-gray-900
+                      border-b-[5px] border-b-transparent" />
+      <div className="bg-gray-900 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-xl">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+/* ── Sidebar Button Wrapper ────────────────────────────────────────────── */
+function SidebarItem({
+  icon,
+  label,
+  shortcut,
+  onClick,
+  disabled,
+  className,
+  isExpanded,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  shortcut?: string;
+  onClick: () => void;
+  disabled?: boolean;
+  className: string;
+  isExpanded: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="relative group flex items-center">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={className}
+      >
+        {icon}
+        {isExpanded && (
+          <span className="text-[11px] font-medium whitespace-nowrap">
+            {label}
+            {shortcut && <span className="ml-1 opacity-40 text-[9px]">({shortcut})</span>}
+          </span>
+        )}
+      </button>
+      <SidebarTooltip
+        label={shortcut ? `${label} (${shortcut})` : label}
+        show={!isExpanded}
+      />
+      {children}
+    </div>
+  );
 }
 
 // Quick token templates
@@ -66,158 +130,168 @@ export default function GameControls({ onConcede: _onConcede }: GameControlsProp
     setDrawXCount('');
   };
 
-  const btnClass = "w-9 h-9 rounded-lg flex items-center justify-center transition-all border";
-  const activeBtnClass = `${btnClass} bg-navy-light hover:bg-cyan-dim/30 border-cyan-dim/40 text-cream-muted hover:text-cream`;
-  const disabledBtnClass = `${btnClass} bg-navy-light/50 border-cyan-dim/20 text-cream-muted/30 cursor-not-allowed`;
+  // Button style helpers
+  const iconSize = "w-4 h-4 shrink-0";
+  const btnBase = `flex items-center gap-2 rounded-lg transition-all border`;
+  const btnSizing = isOpen ? 'px-2.5 py-1.5 pr-3' : 'w-9 h-9 justify-center';
+  const activeBtn = `${btnBase} ${btnSizing} bg-navy-light hover:bg-cyan-dim/30 border-cyan-dim/40 text-cream-muted hover:text-cream`;
+  const disabledBtn = `${btnBase} ${btnSizing} bg-navy-light/50 border-cyan-dim/20 text-cream-muted/30 cursor-not-allowed`;
+  const amberBtn = `${btnBase} ${btnSizing} bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-300`;
+  const magentaBtn = `${btnBase} ${btnSizing} bg-magenta/10 hover:bg-magenta/20 border-magenta/30 text-magenta`;
+  const orangeBtn = `${btnBase} ${btnSizing} bg-orange-500/20 hover:bg-orange-500/35 border-orange-500/50 text-orange-300`;
 
   return (
     <>
-      {/* Floating container — top-left of the main area */}
-      <div className="absolute top-2 left-2 z-40 flex items-start gap-1">
-        {/* Toggle button */}
-        <button
-          onClick={() => setIsOpen(o => !o)}
-          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border ${
-            isOpen
-              ? 'bg-cyan/15 border-cyan text-cyan'
-              : 'bg-navy-light/80 border-cyan-dim/40 text-cream-muted hover:text-cream hover:border-cyan-dim'
-          }`}
-          title={isOpen ? 'Close menu' : 'Open game controls'}
-        >
-          <ChevronRight className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-        </button>
+      {/* Sidebar container — always visible, top-left */}
+      <div className="absolute top-2 left-2 z-40">
+        <div className="bg-navy/95 border border-cyan-dim/50 rounded-xl shadow-2xl backdrop-blur-sm p-1.5 flex flex-col gap-1">
 
-        {/* Expanded panel */}
-        {isOpen && (
-          <div className="bg-navy/95 border border-cyan-dim/50 rounded-xl shadow-2xl p-1.5 flex flex-col gap-1 backdrop-blur-sm">
-            {/* Pass Turn */}
-            {isMyTurn && (
-              <button
-                onClick={passTurn}
-                className={`${btnClass} bg-orange-500/20 hover:bg-orange-500/35 border-orange-500/50 text-orange-300`}
-                title="Pass Turn (E)"
-              >
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            )}
-
-            {/* Draw 1 */}
+          {/* ── EXPAND / COLLAPSE button ──────────────────────────────── */}
+          <div className="relative group">
             <button
-              onClick={() => drawCards(1)}
-              disabled={myLibraryCount === 0}
-              className={myLibraryCount > 0 ? activeBtnClass : disabledBtnClass}
-              title="Draw 1 (C)"
+              onClick={() => setIsOpen(o => !o)}
+              className={`flex items-center gap-2 rounded-lg transition-all border font-bold ${
+                isOpen
+                  ? 'px-2.5 py-1.5 pr-3 bg-pink-500/10 hover:bg-pink-500/20 border-pink-400/30 text-pink-400'
+                  : 'w-9 h-9 justify-center bg-pink-500/10 hover:bg-pink-500/20 border-pink-400/30 text-pink-400'
+              }`}
             >
-              <CreditCard className="w-4 h-4" />
+              <ChevronRight className={`w-4 h-4 shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+              {isOpen && <span className="text-[11px] font-bold whitespace-nowrap">COLLAPSE</span>}
+              {!isOpen && <span className="sr-only">EXPAND</span>}
             </button>
-
-            {/* Draw X */}
-            <div className="relative">
-              <button
-                onClick={() => setShowDrawX(d => !d)}
-                disabled={myLibraryCount === 0}
-                className={myLibraryCount > 0 ? activeBtnClass : disabledBtnClass}
-                title="Draw X"
-              >
-                <Layers className="w-4 h-4" />
-              </button>
-              {showDrawX && (
-                <div className="absolute left-full ml-1 top-0 bg-navy border border-cyan-dim/50 rounded-lg shadow-xl p-2 flex items-center gap-1 z-50">
-                  <input
-                    type="number"
-                    min={1}
-                    max={myLibraryCount}
-                    autoFocus
-                    value={drawXCount}
-                    onChange={e => setDrawXCount(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleDrawX(); if (e.key === 'Escape') setShowDrawX(false); }}
-                    placeholder="#"
-                    className="w-12 text-center text-xs bg-navy-light border border-cyan-dim rounded text-cream py-1 focus:outline-none focus:border-cyan"
-                  />
-                  <button
-                    onClick={handleDrawX}
-                    className="text-[10px] px-2 py-1 bg-cyan/20 border border-cyan-dim rounded text-cyan hover:bg-cyan/30 transition-all"
-                  >
-                    Go
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Mulligan */}
-            <button
-              onClick={() => mulligan(7)}
-              className={activeBtnClass}
-              title="Mulligan (M)"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-
-            {/* Tap All */}
-            <button
-              onClick={() => tapAll('all')}
-              className={activeBtnClass}
-              title="Tap All"
-            >
-              <ToggleRight className="w-4 h-4" />
-            </button>
-
-            {/* Untap All */}
-            <button
-              onClick={untapAll}
-              className={activeBtnClass}
-              title="Untap All (X)"
-            >
-              <ToggleLeft className="w-4 h-4" />
-            </button>
-
-            {/* Roll Dice */}
-            <button
-              onClick={() => setShowDiceRoller(true)}
-              className={`${btnClass} bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-300`}
-              title="Roll Dice"
-            >
-              <Dices className="w-4 h-4" />
-            </button>
-
-            {/* Flip Coin */}
-            <button
-              onClick={() => setShowCoinFlip(true)}
-              className={`${btnClass} bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-300`}
-              title="Flip a Coin"
-            >
-              <CircleDot className="w-4 h-4" />
-            </button>
-
-            {/* Create Token */}
-            <button
-              onClick={() => setShowTokens(t => !t)}
-              className={`${btnClass} bg-magenta/10 hover:bg-magenta/20 border-magenta/30 text-magenta`}
-              title="Create Token"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-
-            {/* Import / Reload Deck */}
-            <button
-              onClick={() => setShowImport(true)}
-              className={activeBtnClass}
-              title="Import / Reload Deck"
-            >
-              <Upload className="w-4 h-4" />
-            </button>
-
-            {/* Concede — commented out for now
-            <button
-              onClick={() => {}}
-              className={`${btnClass} border-red-900/50 text-red-400/60 hover:text-red-400 hover:border-red-700`}
-              title="Concede"
-            >
-              <Flag className="w-4 h-4" />
-            </button>
-            */}
+            <SidebarTooltip label="EXPAND" show={!isOpen} />
           </div>
-        )}
+
+          {/* ── Divider ──────────────────────────────────────────────── */}
+          <div className="border-t border-cyan-dim/20 my-0.5" />
+
+          {/* ── Pass Turn ────────────────────────────────────────────── */}
+          {isMyTurn && (
+            <SidebarItem
+              icon={<ArrowRight className={iconSize} />}
+              label="Pass Turn"
+              shortcut="E"
+              onClick={passTurn}
+              className={orangeBtn}
+              isExpanded={isOpen}
+            />
+          )}
+
+          {/* ── Draw 1 ───────────────────────────────────────────────── */}
+          <SidebarItem
+            icon={<CreditCard className={iconSize} />}
+            label="Draw 1"
+            shortcut="C"
+            onClick={() => drawCards(1)}
+            disabled={myLibraryCount === 0}
+            className={myLibraryCount > 0 ? activeBtn : disabledBtn}
+            isExpanded={isOpen}
+          />
+
+          {/* ── Draw X ───────────────────────────────────────────────── */}
+          <SidebarItem
+            icon={<Layers className={iconSize} />}
+            label="Draw X"
+            onClick={() => setShowDrawX(d => !d)}
+            disabled={myLibraryCount === 0}
+            className={myLibraryCount > 0 ? activeBtn : disabledBtn}
+            isExpanded={isOpen}
+          >
+            {showDrawX && (
+              <div className="absolute left-full ml-3 top-0 bg-navy border border-cyan-dim/50 rounded-lg shadow-xl p-2 flex items-center gap-1 z-50">
+                <input
+                  type="number"
+                  min={1}
+                  max={myLibraryCount}
+                  autoFocus
+                  value={drawXCount}
+                  onChange={e => setDrawXCount(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleDrawX(); if (e.key === 'Escape') setShowDrawX(false); }}
+                  placeholder="#"
+                  className="w-12 text-center text-xs bg-navy-light border border-cyan-dim rounded text-cream py-1 focus:outline-none focus:border-cyan"
+                />
+                <button
+                  onClick={handleDrawX}
+                  className="text-[10px] px-2 py-1 bg-cyan/20 border border-cyan-dim rounded text-cyan hover:bg-cyan/30 transition-all"
+                >
+                  Go
+                </button>
+              </div>
+            )}
+          </SidebarItem>
+
+          {/* ── Mulligan ─────────────────────────────────────────────── */}
+          <SidebarItem
+            icon={<RefreshCw className={iconSize} />}
+            label="Mulligan"
+            shortcut="M"
+            onClick={() => mulligan(7)}
+            className={activeBtn}
+            isExpanded={isOpen}
+          />
+
+          {/* ── Tap All ──────────────────────────────────────────────── */}
+          <SidebarItem
+            icon={<ToggleRight className={iconSize} />}
+            label="Tap All"
+            onClick={() => tapAll('all')}
+            className={activeBtn}
+            isExpanded={isOpen}
+          />
+
+          {/* ── Untap All ────────────────────────────────────────────── */}
+          <SidebarItem
+            icon={<ToggleLeft className={iconSize} />}
+            label="Untap All"
+            shortcut="X"
+            onClick={untapAll}
+            className={activeBtn}
+            isExpanded={isOpen}
+          />
+
+          {/* ── Divider ──────────────────────────────────────────────── */}
+          <div className="border-t border-cyan-dim/20 my-0.5" />
+
+          {/* ── Roll Dice ────────────────────────────────────────────── */}
+          <SidebarItem
+            icon={<Dices className={iconSize} />}
+            label="Roll Dice"
+            onClick={() => setShowDiceRoller(true)}
+            className={amberBtn}
+            isExpanded={isOpen}
+          />
+
+          {/* ── Flip Coin ────────────────────────────────────────────── */}
+          <SidebarItem
+            icon={<CircleDot className={iconSize} />}
+            label="Flip Coin"
+            onClick={() => setShowCoinFlip(true)}
+            className={amberBtn}
+            isExpanded={isOpen}
+          />
+
+          {/* ── Divider ──────────────────────────────────────────────── */}
+          <div className="border-t border-cyan-dim/20 my-0.5" />
+
+          {/* ── Create Token ─────────────────────────────────────────── */}
+          <SidebarItem
+            icon={<Plus className={iconSize} />}
+            label="Create Token"
+            onClick={() => setShowTokens(t => !t)}
+            className={magentaBtn}
+            isExpanded={isOpen}
+          />
+
+          {/* ── Import / Reload Deck ─────────────────────────────────── */}
+          <SidebarItem
+            icon={<Upload className={iconSize} />}
+            label="Import Deck"
+            onClick={() => setShowImport(true)}
+            className={activeBtn}
+            isExpanded={isOpen}
+          />
+        </div>
       </div>
 
       {/* Token picker popover */}
