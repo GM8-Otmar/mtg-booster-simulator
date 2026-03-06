@@ -215,11 +215,8 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
     case 'cards_drawn_other': {
       const player = room.players[delta.playerId];
       if (!player) return room;
-      const newLibIds = player.libraryCardIds.slice(delta.count);
-      const newHandIds = [...player.handCardIds];
-      for (let i = 0; i < delta.count; i++) {
-        newHandIds.push(`hidden-${Date.now()}-${i}`);
-      }
+      const newLibIds = player.libraryCardIds.slice(delta.instanceIds.length);
+      const newHandIds = [...player.handCardIds, ...delta.instanceIds];
       return {
         ...room,
         players: {
@@ -248,6 +245,17 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
     case 'message':
     case 'cards_revealed': {
       return { ...room, actionLog: appendLog(room.actionLog, delta.log) };
+    }
+
+    case 'cards_revealed_state': {
+      const newCards = { ...room.cards };
+      const updates = delta.updates as { instanceId: string; revealed: boolean }[];
+      for (const { instanceId, revealed } of updates) {
+        if (newCards[instanceId]) {
+          newCards[instanceId] = { ...newCards[instanceId]!, revealed };
+        }
+      }
+      return { ...room, cards: newCards, actionLog: appendLog(room.actionLog, delta.log) };
     }
 
     case 'mulligan': {
@@ -285,7 +293,7 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
         ...room,
         players: {
           ...room.players,
-          [delta.playerId]: { ...player, handCardIds: Array(delta.handCount).fill('?') },
+          [delta.playerId]: { ...player, handCardIds: delta.instanceIds },
         },
         actionLog: appendLog(room.actionLog, delta.log),
       };

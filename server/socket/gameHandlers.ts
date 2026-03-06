@@ -494,7 +494,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     socket.emit('game:delta', { type: 'cards_drawn', drawn: drawnCards, log: room.actionLog.at(-1) });
     socket.to(ROOM(gameRoomId)).emit('game:delta', {
       type: 'cards_drawn_other', playerId,
-      count: drawn.length,
+      instanceIds: drawn,
       libraryCount: player.libraryCardIds.length,
       log: room.actionLog.at(-1),
     });
@@ -578,7 +578,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     const drawnCards = drawn.map(id => room.cards[id]!);
     socket.emit('game:delta', { type: 'mulligan', drawn: drawnCards, keepCount, log: room.actionLog.at(-1) });
     socket.to(ROOM(gameRoomId)).emit('game:delta', {
-      type: 'mulligan_other', playerId, keepCount, handCount: drawn.length, log: room.actionLog.at(-1),
+      type: 'mulligan_other', playerId, keepCount, instanceIds: drawn, log: room.actionLog.at(-1),
     });
   });
 
@@ -626,17 +626,34 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     const room = await storage.loadGame(gameRoomId);
     if (!room || !room.players[playerId]) return;
     const player = room.players[playerId]!;
-    const names = instanceIds.map(id => room.cards[id]?.name).filter((n): n is string => !!n);
-    let desc: string;
-    if (names.length === 1) {
-      desc = `${player.playerName} revealed ${names[0]}`;
-    } else {
-      desc = `${player.playerName} revealed ${names.length} cards: ${names.join(', ')}`;
+    
+    const updates: { instanceId: string; revealed: boolean }[] = [];
+    const revealedNames: string[] = [];
+    const hiddenNames: string[] = [];
+    
+    for (const id of instanceIds) {
+      const card = room.cards[id];
+      if (!card || card.controller !== playerId || card.zone !== 'hand') continue;
+      card.revealed = !card.revealed;
+      updates.push({ instanceId: id, revealed: card.revealed });
+      if (card.revealed) revealedNames.push(card.name);
+      else hiddenNames.push(card.name);
     }
-    gameService.appendLog(room, playerId, 'reveal', desc);
+    
+    if (updates.length === 0) return;
+
+    let desc = '';
+    if (revealedNames.length > 0) {
+      desc += `${player.playerName} revealed ${revealedNames.join(', ')}. `;
+    }
+    if (hiddenNames.length > 0) {
+      desc += `${player.playerName} hid ${hiddenNames.join(', ')}.`;
+    }
+
+    gameService.appendLog(room, playerId, 'reveal', desc.trim());
     room.lastActivity = ts();
     await storage.saveGame(room);
-    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'cards_revealed', playerId, log: room.actionLog.at(-1) });
+    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'cards_revealed_state', playerId, updates, log: room.actionLog.at(-1) });
   });
 
   // ── Dice roll ─────────────────────────────────────────────────────────────
@@ -649,6 +666,21 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     const player = room.players[playerId]!;
     gameService.appendLog(room, playerId, 'dice_roll',
       `${player.playerName} rolled a d${faces}: ${result}`);
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'message', log: room.actionLog.at(-1) });
+  });
+
+  // ── Coin flip ──────────────────────────────────────────────────────────────
+
+  socket.on('game:coin-flip', async ({
+    gameRoomId, playerId, result,
+  }: { gameRoomId: string; playerId: string; result: string }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !room.players[playerId]) return;
+    const player = room.players[playerId]!;
+    gameService.appendLog(room, playerId, 'coin_flip',
+      `${player.playerName} flipped a coin: ${result}`);
     room.lastActivity = ts();
     await storage.saveGame(room);
     io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'message', log: room.actionLog.at(-1) });

@@ -23,7 +23,7 @@ function HandCard({
   onDragMove?: (instanceId: string, clientX: number) => void;
   onDragEnd?: () => void;
 }) {
-  const { inspect } = useCardInspector();
+  const { inspect, hoverInspect, clearHoverInspect } = useCardInspector();
 
   const startX = useRef(0);
   const startY = useRef(0);
@@ -155,7 +155,7 @@ function HandCard({
     <>
       {/* Card in set */}
       <div
-        className="relative cursor-grab group flex-shrink-0"
+        className="relative cursor-grab group flex-shrink-0 animate-card-fly-in"
         style={{
           width: 80,
           height: 112,
@@ -172,8 +172,16 @@ function HandCard({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onMouseEnter={() => { if (!isDragging) setIsHovered(true); }}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => {
+          if (!isDragging) {
+            setIsHovered(true);
+            hoverInspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId });
+          }
+        }}
+        onMouseLeave={() => {
+          setIsHovered(false);
+          clearHoverInspect();
+        }}
         onContextMenu={onContextMenu}
         onDragStart={e => e.preventDefault()}
       >
@@ -195,6 +203,15 @@ function HandCard({
 
         {card.isCommander && (
           <div className="absolute -top-2 -right-2 bg-magenta rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow-md">★</div>
+        )}
+
+        {card.revealed && (
+          <div className="absolute top-1 left-1 bg-navy/90 text-cyan border border-cyan/40 rounded-full p-1 shadow-md pointer-events-none" title="Revealed to everyone">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </div>
         )}
 
         {/* Selection glow */}

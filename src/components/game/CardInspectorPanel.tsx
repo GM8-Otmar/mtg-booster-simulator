@@ -1,6 +1,6 @@
 /**
- * CardInspectorPanel — fixed right-side panel showing full card detail.
- * Click any card to populate. Fetches oracle text from Scryfall API by name.
+ * CardInspectorPanel — card inspector context and floating hover overlay.
+ * Supports both click-to-inspect (inspect) and hover-to-inspect (hoverInspect).
  * Used as a React context so any card component can trigger it.
  */
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
@@ -14,23 +14,38 @@ interface InspectedCard {
 
 interface InspectorCtx {
   inspect: (card: InspectedCard) => void;
+  hoverInspect: (card: InspectedCard) => void;
+  clearHoverInspect: () => void;
   inspected: InspectedCard | null;
+  hoveredCard: InspectedCard | null;
 }
 
 const InspectorContext = createContext<InspectorCtx>({
   inspect: () => {},
+  hoverInspect: () => {},
+  clearHoverInspect: () => {},
   inspected: null,
+  hoveredCard: null,
 });
 
 export function CardInspectorProvider({ children }: { children: React.ReactNode }) {
   const [inspected, setInspected] = useState<InspectedCard | null>(null);
+  const [hoveredCard, setHoveredCard] = useState<InspectedCard | null>(null);
 
   const inspect = useCallback((card: InspectedCard) => {
     setInspected(card);
   }, []);
 
+  const hoverInspect = useCallback((card: InspectedCard) => {
+    setHoveredCard(card);
+  }, []);
+
+  const clearHoverInspect = useCallback(() => {
+    setHoveredCard(null);
+  }, []);
+
   return (
-    <InspectorContext.Provider value={{ inspect, inspected }}>
+    <InspectorContext.Provider value={{ inspect, hoverInspect, clearHoverInspect, inspected, hoveredCard }}>
       {children}
     </InspectorContext.Provider>
   );
@@ -40,7 +55,7 @@ export function useCardInspector() {
   return useContext(InspectorContext);
 }
 
-function useOracleData(name: string | null) {
+export function useOracleData(name: string | null) {
   const [data, setData] = useState<OracleData | null | 'loading'>(null);
   const fetchedFor = useRef<string | null>(null);
 
@@ -66,7 +81,7 @@ export function CardInspectorPanel() {
     return (
       <div className="flex flex-col items-center justify-center h-full p-4 text-center">
         <div className="w-16 h-24 rounded-lg border-2 border-dashed border-cyan-dim/20 mb-3 flex items-center justify-center">
-          <span className="text-cream-muted/20 text-2xl">🃏</span>
+          <span className="text-cream-muted/20 text-2xl">{'\uD83C\uDCCF'}</span>
         </div>
         <p className="text-cream-muted/30 text-xs">Click any card to inspect</p>
       </div>
@@ -141,7 +156,7 @@ export function CardInspectorPanel() {
               )}
               {oracle.loyalty != null && (
                 <span className="text-xs font-bold text-magenta bg-navy-light px-2 py-0.5 rounded border border-magenta/30">
-                  ◆ {oracle.loyalty}
+                  {'\u25C6'} {oracle.loyalty}
                 </span>
               )}
             </div>

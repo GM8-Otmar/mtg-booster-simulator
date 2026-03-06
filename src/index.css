@@ -38,3 +38,13 @@ body {
   20%  { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* Card drawing fly in */
+@keyframes card-fly-in {
+  from { translate: 0 100%; opacity: 0; }
+  to { translate: 0 0; opacity: 1; }
+}
+
+.animate-card-fly-in {
+  animation: card-fly-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}

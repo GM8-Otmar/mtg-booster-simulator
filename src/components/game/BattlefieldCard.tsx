@@ -36,7 +36,7 @@ export default function BattlefieldCard({
   isMultiDragLead,
 }: BattlefieldCardProps) {
   const { moveCard, tapCard, bulkTapCards, changeZone, addCounter, effectivePlayerId: playerId, isTargetingMode, completeTargeting, shakingCardIds } = useGameTable();
-  const { inspect } = useCardInspector();
+  const { inspect, hoverInspect, clearHoverInspect } = useCardInspector();
 
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -295,6 +295,12 @@ export default function BattlefieldCard({
         onPointerDown={onPointerDown}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
+        onMouseEnter={() => {
+          if (!isDragging && !isPressed) {
+            hoverInspect({ name: card.name, imageUri: isFaceDown ? null : card.imageUri, instanceId: card.instanceId });
+          }
+        }}
+        onMouseLeave={() => clearHoverInspect()}
       >
         <div className={`w-full h-full rounded-lg overflow-hidden border-2 ${borderColor} shadow-lg`}>
           {isFaceDown ? (

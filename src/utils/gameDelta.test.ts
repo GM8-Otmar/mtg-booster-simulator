@@ -301,13 +301,15 @@ describe('applyDelta', () => {
       const result = applyDelta(room, {
         type: 'cards_drawn_other',
         playerId: 'player-1',
-        count: 2,
+        instanceIds: ['a', 'b'],
         libraryCount: 1,
         log: undefined,
       }, 'player-2');
 
       expect(result.players['player-1']!.libraryCardIds).toHaveLength(1);
       expect(result.players['player-1']!.libraryCardIds[0]).toBe('c');
+      expect(result.players['player-1']!.handCardIds).toContain('a');
+      expect(result.players['player-1']!.handCardIds).toContain('b');
     });
   });
 
@@ -347,6 +349,43 @@ describe('applyDelta', () => {
       expect(result.players['player-1']!.handCardIds).not.toContain('old-1');
       expect(result.cards['old-1']!.zone).toBe('library');
       expect(result.cards['new-1']!.zone).toBe('hand');
+    });
+
+    it('updates hand for another player', () => {
+      const room = makeRoom({
+        players: { 'player-1': makePlayer({ handCardIds: ['old-1'] }) },
+      });
+
+      const result = applyDelta(room, {
+        type: 'mulligan_other',
+        playerId: 'player-1',
+        instanceIds: ['new-1', 'new-2'],
+        keepCount: 6,
+        log: makeLog(),
+      }, 'player-2');
+
+      expect(result.players['player-1']!.handCardIds).toEqual(['new-1', 'new-2']);
+    });
+  });
+
+  describe('cards_revealed_state', () => {
+    it('updates the revealed flag on multiple cards', () => {
+      const c1 = makeCard({ instanceId: 'c1', revealed: false });
+      const c2 = makeCard({ instanceId: 'c2', revealed: false });
+      const room = makeRoom({ cards: { c1, c2 } });
+
+      const result = applyDelta(room, {
+        type: 'cards_revealed_state',
+        updates: [
+          { instanceId: 'c1', revealed: true },
+          { instanceId: 'c2', revealed: true },
+        ],
+        log: makeLog({ description: 'cards revealed' }),
+      }, null);
+
+      expect(result.cards['c1']!.revealed).toBe(true);
+      expect(result.cards['c2']!.revealed).toBe(true);
+      expect(result.actionLog).toHaveLength(1);
     });
   });
 

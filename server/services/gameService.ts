@@ -167,7 +167,9 @@ export async function importDeck(
       counters: [],
       isCommander,
     };
-    room.cards[instanceId] = card;
+    if (room) {
+      room.cards[instanceId] = card;
+    }
     return instanceId;
   }
 
@@ -221,9 +223,10 @@ export function sanitiseForPlayer(room: GameRoom, viewerId: string): GameRoom {
   for (const [pid, player] of Object.entries(room.players)) {
     if (pid === viewerId) continue;
     for (const instanceId of player.handCardIds) {
-      if (sanitised.cards[instanceId]) {
+      const card = sanitised.cards[instanceId];
+      if (card && !card.revealed) {
         sanitised.cards[instanceId] = {
-          ...sanitised.cards[instanceId]!,
+          ...card,
           scryfallId: 'hidden',
           imageUri: null,
           name: 'Hidden Card',

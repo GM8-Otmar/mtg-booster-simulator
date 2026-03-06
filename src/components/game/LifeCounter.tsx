@@ -26,15 +26,15 @@ export default function LifeCounter({ life, poison, playerId }: LifeCounterProps
   };
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center gap-1">
       {/* Life total */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1.5">
         {isOwner && (
           <button
             onClick={() => adjustLife(-1)}
-            className="w-8 h-8 rounded-full bg-navy-light hover:bg-red-900/50 border border-cyan-dim text-cream text-lg font-bold transition-all active:scale-95"
+            className="w-6 h-6 rounded-full bg-navy-light hover:bg-red-900/50 border border-cyan-dim text-cream text-sm font-bold transition-all active:scale-95"
           >
-            −
+            {'\u2212'}
           </button>
         )}
 
@@ -49,11 +49,11 @@ export default function LifeCounter({ life, poison, playerId }: LifeCounterProps
               if (e.key === 'Enter') handleSetLife();
               if (e.key === 'Escape') setEditing(false);
             }}
-            className="w-20 text-center text-4xl font-bold bg-navy border-2 border-cyan rounded-lg text-cream focus:outline-none"
+            className="w-14 text-center text-xl font-bold bg-navy border-2 border-cyan rounded-lg text-cream focus:outline-none"
           />
         ) : (
           <span
-            className={`text-5xl font-bold font-mono min-w-[3rem] text-center leading-none ${lifeColor} ${isOwner ? 'cursor-pointer hover:opacity-80' : ''} transition-opacity`}
+            className={`text-2xl font-bold font-mono min-w-[2rem] text-center leading-none ${lifeColor} ${isOwner ? 'cursor-pointer hover:opacity-80' : ''} transition-opacity`}
             onClick={() => isOwner && (setEditValue(String(life)), setEditing(true))}
             title={isOwner ? 'Click to set life total' : undefined}
           >
@@ -64,34 +64,32 @@ export default function LifeCounter({ life, poison, playerId }: LifeCounterProps
         {isOwner && (
           <button
             onClick={() => adjustLife(1)}
-            className="w-8 h-8 rounded-full bg-navy-light hover:bg-green-900/50 border border-cyan-dim text-cream text-lg font-bold transition-all active:scale-95"
+            className="w-6 h-6 rounded-full bg-navy-light hover:bg-green-900/50 border border-cyan-dim text-cream text-sm font-bold transition-all active:scale-95"
           >
             +
           </button>
         )}
       </div>
 
-      <span className="text-[11px] text-cream-muted uppercase tracking-widest">Life</span>
-
-      {/* Poison counters */}
+      {/* Poison counters — compact */}
       {(poison > 0 || isOwner) && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {isOwner && (
             <button
               onClick={() => adjustPoison(-1)}
               disabled={poison === 0}
-              className="w-6 h-6 rounded-full bg-navy-light hover:bg-navy border border-cyan-dim text-cream-muted text-xs disabled:opacity-30 transition-all"
+              className="w-5 h-5 rounded-full bg-navy-light hover:bg-navy border border-cyan-dim text-cream-muted text-[10px] disabled:opacity-30 transition-all"
             >
-              −
+              {'\u2212'}
             </button>
           )}
-          <span className={`text-sm font-mono font-bold min-w-[2.5rem] text-center ${poison > 0 ? 'text-green-400' : 'text-cream-muted/40'}`}>
-            ☠ {poison}
+          <span className={`text-xs font-mono font-bold min-w-[2rem] text-center ${poison > 0 ? 'text-green-400' : 'text-cream-muted/40'}`}>
+            {'\u2620'} {poison}
           </span>
           {isOwner && (
             <button
               onClick={() => adjustPoison(1)}
-              className="w-6 h-6 rounded-full bg-navy-light hover:bg-navy border border-cyan-dim text-cream-muted text-xs transition-all"
+              className="w-5 h-5 rounded-full bg-navy-light hover:bg-navy border border-cyan-dim text-cream-muted text-[10px] transition-all"
             >
               +
             </button>

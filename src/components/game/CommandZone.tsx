@@ -10,12 +10,14 @@ interface CommandZoneProps {
   playerId: string;
 }
 
-function CommandCard({ card, isOwner, onContextMenu, onCast, onInspect }: {
+function CommandCard({ card, isOwner, onContextMenu, onCast, onInspect, onHoverInspect, onHoverLeave }: {
   card: BattlefieldCard;
   isOwner: boolean;
   onContextMenu: (e: React.MouseEvent) => void;
   onCast: () => void;
   onInspect: () => void;
+  onHoverInspect: () => void;
+  onHoverLeave: () => void;
 }) {
   return (
     <div className="flex flex-col items-center gap-1">
@@ -24,6 +26,8 @@ function CommandCard({ card, isOwner, onContextMenu, onCast, onInspect }: {
         onContextMenu={onContextMenu}
         onDoubleClick={isOwner ? onCast : undefined}
         onClick={onInspect}
+        onMouseEnter={onHoverInspect}
+        onMouseLeave={onHoverLeave}
         title={isOwner ? 'Double-click to cast' : card.name}
       >
         {card.imageUri ? (
@@ -48,7 +52,7 @@ function CommandCard({ card, isOwner, onContextMenu, onCast, onInspect }: {
 
 export default function CommandZone({ cards, commanderTax, playerId: ownerId }: CommandZoneProps) {
   const { notifyCommanderCast, changeZone, effectivePlayerId: myId } = useGameTable();
-  const { inspect } = useCardInspector();
+  const { inspect, hoverInspect, clearHoverInspect } = useCardInspector();
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
 
   const isOwner = ownerId === myId;
@@ -82,6 +86,8 @@ export default function CommandZone({ cards, commanderTax, playerId: ownerId }: 
               changeZone(card.instanceId, 'battlefield');
             }}
             onInspect={() => inspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId })}
+            onHoverInspect={() => hoverInspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId })}
+            onHoverLeave={() => clearHoverInspect()}
           />
         ))}
       </div>

@@ -20,6 +20,7 @@ const ACTION_COLORS: Record<string, string> = {
   counter_change: 'text-blue-300',
   poison_change: 'text-purple-400',
   dice_roll: 'text-amber-300',
+  coin_flip: 'text-amber-300',
   reveal: 'text-yellow-300',
   turn_pass: 'text-orange-400',
   targeting: 'text-red-300',

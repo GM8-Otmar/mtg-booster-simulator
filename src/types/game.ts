@@ -40,6 +40,7 @@ export interface BattlefieldCard {
   counters: CardCounter[];
 
   isCommander: boolean;
+  revealed?: boolean;
 }
 
 export interface GamePlayerState {
