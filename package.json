@@ -17,6 +17,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.10.12",
+    "@types/uuid": "^10.0.0",
     "axios": "^1.13.2",
     "cors": "^2.8.6",
     "express": "^5.2.1",
@@ -25,6 +29,7 @@
     "react-dom": "^19.2.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
+    "typescript": "~5.9.3",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
@@ -33,12 +38,8 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/node": "^24.10.12",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
-    "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.0.18",
     "concurrently": "^9.2.1",
@@ -51,7 +52,6 @@
     "tailwindcss": "^4.1.18",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
     "vitest": "^4.0.18"
