@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { BattlefieldCard, GameZone } from '../../types/game';
 import CardContextMenu from './CardContextMenu';
 import { useGameTable } from '../../contexts/GameTableContext';
@@ -9,25 +9,21 @@ interface HandZoneProps {
 }
 
 function HandCard({
-  card, i, total, fanAngle, startAngle,
+  card,
   isSelected,
-  onContextMenu, onPlayToBattlefield, onSendToZone, onToggleSelect, onReorder,
+  onContextMenu, onPlayToBattlefield, onSendToZone, onToggleSelect, onReorder, onDragMove, onDragEnd
 }: {
   card: BattlefieldCard;
-  i: number;
-  total: number;
-  fanAngle: number;
-  startAngle: number;
   isSelected: boolean;
   onContextMenu: (e: React.MouseEvent) => void;
   onPlayToBattlefield: (instanceId: string, clientX: number, clientY: number) => void;
   onSendToZone: (instanceId: string, zone: string) => void;
   onToggleSelect: (instanceId: string) => void;
   onReorder?: (instanceId: string, clientX: number) => void;
+  onDragMove?: (instanceId: string, clientX: number) => void;
+  onDragEnd?: () => void;
 }) {
   const { inspect } = useCardInspector();
-  const angle = startAngle + i * fanAngle;
-  const offsetX = (i - (total - 1) / 2) * 36;
 
   const startX = useRef(0);
   const startY = useRef(0);
@@ -54,8 +50,22 @@ function HandCard({
       clearHighlights();
       const hits = document.elementsFromPoint(e.clientX, e.clientY);
       const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
-      if (zoneEl && zoneEl.dataset.dropZone !== 'hand') {
-        zoneEl.style.outline = '3px solid rgba(0, 220, 255, 0.85)';
+      let hoveringHand = false;
+      if (zoneEl) {
+        if (zoneEl.dataset.dropZone !== 'hand') {
+          zoneEl.style.outline = '3px solid rgba(0, 220, 255, 0.85)';
+        } else {
+          hoveringHand = true;
+        }
+      } else if (hits.some(el => el.closest('[data-drop-zone="hand"]'))) {
+        hoveringHand = true;
+      }
+
+      const dy = startY.current - e.clientY;
+      if (hoveringHand && dy < 60 && onDragMove) {
+        onDragMove(card.instanceId, e.clientX);
+      } else if (onDragEnd) {
+        onDragEnd(); // Hide shadow if we move out of hand
       }
     };
 
@@ -81,12 +91,14 @@ function HandCard({
       }
       setIsDragging(false);
       setIsHovered(false);
+      if (onDragEnd) onDragEnd();
     };
 
     const onCancel = () => {
       clearHighlights();
       setIsDragging(false);
       setIsHovered(false);
+      if (onDragEnd) onDragEnd();
     };
 
     window.addEventListener('pointermove', onMove);
@@ -98,7 +110,7 @@ function HandCard({
       window.removeEventListener('pointercancel', onCancel);
       clearHighlights();
     };
-  }, [isDragging, card.instanceId, onPlayToBattlefield, onSendToZone, onReorder]);
+  }, [isDragging, card.instanceId, onPlayToBattlefield, onSendToZone, onReorder, onDragMove, onDragEnd]);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button === 2) return;
@@ -141,19 +153,17 @@ function HandCard({
 
   return (
     <>
-      {/* Card in fan */}
+      {/* Card in set */}
       <div
-        className="absolute cursor-grab group"
+        className="relative cursor-grab group flex-shrink-0"
         style={{
           width: 80,
           height: 112,
-          left: `calc(50% + ${offsetX}px - 40px)`,
-          bottom: 0,
           transform: isHovered && !isDragging
-            ? `rotate(${angle}deg) translateY(-20px)`
-            : `rotate(${angle}deg)`,
+            ? `translateY(-20px)`
+            : `translateY(0)`,
           transformOrigin: 'bottom center',
-          zIndex: isHovered && !isDragging ? 99 : i,
+          zIndex: isHovered && !isDragging ? 99 : 1,
           opacity: isDragging ? 0.3 : 1,
           transition: isDragging ? 'none' : 'transform 0.15s ease, opacity 0.1s',
           userSelect: 'none',
@@ -205,7 +215,7 @@ function HandCard({
           <div className="w-full h-full rounded-lg overflow-hidden border-2 border-cyan shadow-2xl scale-110">
             {card.imageUri ? (
               <img
-                src={card.imageUri}
+                src={card.imageUri!}
                 alt={card.name}
                 className="w-full h-full object-cover"
                 draggable={false}
@@ -231,10 +241,10 @@ export default function HandZone({ cards }: HandZoneProps) {
   const { changeZone, moveCard, reorderHand } = useGameTable();
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [dragShadowIndex, setDragShadowIndex] = useState<number | null>(null);
+  const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
 
   const total = cards.length;
-  const fanAngle = Math.min(4, 60 / Math.max(total, 1));
-  const startAngle = -((total - 1) / 2) * fanAngle;
 
   // Clear selection if selected cards leave the hand
   useEffect(() => {
@@ -293,25 +303,63 @@ export default function HandZone({ cards }: HandZoneProps) {
     setSelectedIds(new Set());
   }, [changeZone, moveCard, selectedIds]);
 
-  const handleReorder = useCallback((instanceId: string, clientX: number) => {
+  const getReorderDropIndex = useCallback((instanceId: string, clientX: number) => {
     const handZone = document.querySelector('[data-drop-zone="hand"]') as HTMLElement | null;
-    if (!handZone) return;
+    if (!handZone) return null;
 
-    const rect = handZone.getBoundingClientRect();
-    // Cards are fanned around the center of the hand zone.
-    // Card offsetX: (i - (total - 1) / 2) * 36
-    // Center of hand zone is roughly rect.left + rect.width / 2.
-    const centerX = rect.left + rect.width / 2;
-    // Calculate the drop index based on the mouse clientX relative to center
-    const xOffsetFromCenter = clientX - centerX;
+    // Get the container that actually holds the cards (the gap layout)
+    const cardContainer = handZone.querySelector('.hand-cards-container') as HTMLElement | null;
+    if (!cardContainer) return null;
+
+    const cardsArray = Array.from(cardContainer.querySelectorAll('.hand-card-wrapper')) as HTMLElement[];
+    // Find where the drag happened relative to the cards
+    let newIndex = cards.findIndex(c => c.instanceId === instanceId);
     
-    // Each card is separated by ~36px
-    let newIndex = Math.round(xOffsetFromCenter / 36 + (total - 1) / 2);
-    
-    // Clamp to valid indices
-    newIndex = Math.max(0, Math.min(newIndex, total - 1));
+    for (let i = 0; i < cardsArray.length; i++) {
+        const rect = cardsArray[i]!.getBoundingClientRect();
+        // If the mouse is to the left of the card's horizontal center point
+        if (clientX < rect.left + rect.width / 2) {
+            newIndex = i;
+            break;
+        }
+        newIndex = i; // if it's the rightmost, it'll end up here
+    }
+    return newIndex;
+  }, [cards]);
+
+  const handleDragMove = useCallback((instanceId: string, clientX: number) => {
+    const dropIndex = getReorderDropIndex(instanceId, clientX);
+    if (dropIndex !== null) {
+      const currentIndex = cards.findIndex(c => c.instanceId === instanceId);
+      // Only show shadow if it's moving to a DIFFERENT spot
+      if (dropIndex !== currentIndex && dropIndex !== currentIndex + 1) {
+        setDragShadowIndex(dropIndex);
+        setDraggedCardId(instanceId);
+      } else {
+        setDragShadowIndex(null);
+      }
+    }
+  }, [getReorderDropIndex, cards]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragShadowIndex(null);
+    setDraggedCardId(null);
+  }, []);
+
+  const handleReorder = useCallback((instanceId: string, clientX: number) => {
+    setDragShadowIndex(null);
+    setDraggedCardId(null);
+
+    const newIndex = getReorderDropIndex(instanceId, clientX);
+    if (newIndex === null) return;
 
     const currentIndex = cards.findIndex(c => c.instanceId === instanceId);
+    // If dropping a card that comes before the target position, it shifts everyone left
+    if (currentIndex !== -1 && currentIndex < newIndex) {
+        // Example: arr = [0, 1, 2, 3], drag 0 to right half of 2. newIndex=2. Result: [1, 2, 0, 3]
+        // But since we are removing one, we have to adjust
+    }
+
     if (currentIndex === -1 || currentIndex === newIndex) return; // No change
 
     const newHandIds = cards.map(c => c.instanceId);
@@ -319,7 +367,7 @@ export default function HandZone({ cards }: HandZoneProps) {
     newHandIds.splice(newIndex, 0, instanceId);
 
     reorderHand(newHandIds);
-  }, [cards, total, reorderHand]);
+  }, [cards, reorderHand]);
 
   const hasSelection = selectedIds.size > 0;
   const selectedCards = hasSelection ? cards.filter(c => selectedIds.has(c.instanceId)) : undefined;
@@ -351,26 +399,37 @@ export default function HandZone({ cards }: HandZoneProps) {
         </div>
       )}
 
-      <div className="relative flex items-end" style={{ height: 112, minWidth: total * 36 + 44 }}>
-        {cards.map((card, i) => (
-          <HandCard
-            key={card.instanceId}
-            card={card}
-            i={i}
-            total={total}
-            fanAngle={fanAngle}
-            startAngle={startAngle}
-            isSelected={selectedIds.has(card.instanceId)}
-            onToggleSelect={toggleSelect}
-            onContextMenu={e => {
-              e.preventDefault();
-              setMenuInfo({ card, x: e.clientX, y: e.clientY });
-            }}
-            onPlayToBattlefield={handlePlayToBattlefield}
-            onSendToZone={handleSendToZone}
-            onReorder={handleReorder}
-          />
-        ))}
+      <div className="relative flex items-end justify-center w-full overflow-visible max-w-[calc(100vw-32px)]">
+        {/* We use negative margins to overlap them slightly, or just gap if they want them completely side-by-side.
+            The user asked for [][][][][] instead of fanned stacking. A small gap is best. */}
+        <div className="hand-cards-container flex gap-[4px] px-4 overflow-x-auto items-end pb-2 pt-8 snap-x custom-scrollbar" style={{ height: 140 }}>
+          {cards.map((card, i) => (
+            <React.Fragment key={card.instanceId}>
+              {dragShadowIndex === i && (
+                <div className="w-[80px] h-[112px] rounded-lg bg-black/40 border-2 border-white/20 border-dashed flex-shrink-0" />
+              )}
+              <div className={`snap-center hand-card-wrapper ${draggedCardId === card.instanceId ? 'opacity-30' : ''}`}>
+                <HandCard
+                  card={card}
+                  isSelected={selectedIds.has(card.instanceId)}
+                  onToggleSelect={toggleSelect}
+                  onContextMenu={e => {
+                    e.preventDefault();
+                    setMenuInfo({ card, x: e.clientX, y: e.clientY });
+                  }}
+                  onPlayToBattlefield={handlePlayToBattlefield}
+                  onSendToZone={handleSendToZone}
+                  onReorder={handleReorder}
+                  onDragMove={handleDragMove}
+                  onDragEnd={handleDragEnd}
+                />
+              </div>
+            </React.Fragment>
+          ))}
+          {dragShadowIndex === cards.length && (
+            <div className="w-[80px] h-[112px] rounded-lg bg-black/40 border-2 border-white/20 border-dashed flex-shrink-0" />
+          )}
+        </div>
       </div>
 
       {menuInfo && (
