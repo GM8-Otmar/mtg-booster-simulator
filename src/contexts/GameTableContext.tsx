@@ -270,8 +270,9 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
 
   // ── REST helpers ──────────────────────────────────────────────────────────
 
+  const API_BASE = import.meta.env.VITE_API_URL || '';
   const post = useCallback(async (path: string, body: unknown): Promise<any> => {
-    const res = await fetch(`/api/games${path}`, {
+    const res = await fetch(`${API_BASE}/api/games${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
