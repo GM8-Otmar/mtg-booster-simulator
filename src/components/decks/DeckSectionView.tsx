@@ -7,6 +7,8 @@ interface DeckSectionViewProps {
   onIncrement: (section: DeckSection, cardName: string) => void;
   onDecrement: (section: DeckSection, cardName: string) => void;
   onRemove: (section: DeckSection, cardName: string) => void;
+  onChoosePrinting: (section: DeckSection, cardName: string) => void;
+  onClearPrinting: (section: DeckSection, cardName: string) => void;
 }
 
 export default function DeckSectionView({
@@ -16,6 +18,8 @@ export default function DeckSectionView({
   onIncrement,
   onDecrement,
   onRemove,
+  onChoosePrinting,
+  onClearPrinting,
 }: DeckSectionViewProps) {
   const total = entries.reduce((sum, entry) => sum + entry.count, 0);
 
@@ -41,7 +45,21 @@ export default function DeckSectionView({
                 )}
               </div>
 
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                <button
+                  onClick={() => onChoosePrinting(section, entry.cardName)}
+                  className="px-2 py-1 rounded-md bg-navy hover:bg-navy-light border border-cyan-dim text-cyan text-xs font-semibold"
+                >
+                  {entry.preferredPrinting ? 'Art' : 'Pick Art'}
+                </button>
+                {entry.preferredPrinting && (
+                  <button
+                    onClick={() => onClearPrinting(section, entry.cardName)}
+                    className="px-2 py-1 rounded-md bg-navy hover:bg-navy-light border border-cyan-dim text-cream-muted text-xs font-semibold"
+                  >
+                    Clear
+                  </button>
+                )}
                 <button
                   onClick={() => onDecrement(section, entry.cardName)}
                   className="w-7 h-7 rounded-md bg-navy hover:bg-navy-light border border-cyan-dim text-cream"
@@ -57,7 +75,7 @@ export default function DeckSectionView({
                 </button>
                 <button
                   onClick={() => onRemove(section, entry.cardName)}
-                  className="ml-2 px-2 py-1 rounded-md bg-magenta/20 hover:bg-magenta/30 border border-magenta/40 text-magenta text-xs font-semibold"
+                  className="px-2 py-1 rounded-md bg-magenta/20 hover:bg-magenta/30 border border-magenta/40 text-magenta text-xs font-semibold"
                 >
                   Remove
                 </button>

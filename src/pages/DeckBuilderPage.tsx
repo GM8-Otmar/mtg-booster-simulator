@@ -3,15 +3,18 @@ import DeckSearchPanel from '../components/decks/DeckSearchPanel';
 import DeckSectionView from '../components/decks/DeckSectionView';
 import DeckStatsPanel from '../components/decks/DeckStatsPanel';
 import DeckValidationPanel from '../components/decks/DeckValidationPanel';
+import PrintingPickerModal from '../components/decks/PrintingPickerModal';
 import { useDeckLibrary } from '../contexts/DeckLibraryContext';
-import { searchDeckCards } from '../services/deckCardSearch';
+import { searchCardPrintings, searchDeckCards } from '../services/deckCardSearch';
 import type { ScryfallCard } from '../types/card';
 import type { DeckRecord, DeckSection, PreferredPrinting } from '../types/deck';
 import {
   addCardToSection,
   changeCardCount,
+  clearPreferredPrinting,
   removeCardFromSection,
   setCommander,
+  setPreferredPrinting,
   touchUpdatedAt,
 } from '../utils/deckRecord';
 
@@ -46,6 +49,10 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [printingPicker, setPrintingPicker] = useState<{ section: DeckSection; cardName: string } | null>(null);
+  const [printingResults, setPrintingResults] = useState<ScryfallCard[]>([]);
+  const [printingLoading, setPrintingLoading] = useState(false);
+  const [printingError, setPrintingError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -89,25 +96,11 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
     });
   };
 
-  const assignPrintingToEntry = (
-    current: DeckRecord,
-    section: DeckSection,
-    cardName: string,
-    printing: PreferredPrinting,
-  ): DeckRecord => ({
-    ...current,
-    [section]: current[section].map(entry =>
-      entry.cardName.toLowerCase() === cardName.toLowerCase()
-        ? { ...entry, preferredPrinting: printing }
-        : entry
-    ),
-  });
-
   const handleAddToSection = (section: DeckSection, card: ScryfallCard) => {
     const printing = toPreferredPrinting(card);
     updateDeck(current => {
       let next = addCardToSection(current, section, card.name, 1);
-      next = assignPrintingToEntry(next, section, card.name, printing);
+      next = setPreferredPrinting(next, section, card.name, printing);
       return next;
     });
   };
@@ -116,7 +109,7 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
     const printing = toPreferredPrinting(card);
     updateDeck(current => {
       let next = setCommander(current, card.name);
-      next = assignPrintingToEntry(next, 'commander', card.name, printing);
+      next = setPreferredPrinting(next, 'commander', card.name, printing);
       return next;
     });
   };
@@ -176,6 +169,48 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
       setIsSaving(false);
     }
   };
+
+  const loadPrintings = async (cardName: string) => {
+    setPrintingLoading(true);
+    setPrintingError(null);
+    try {
+      const results = await searchCardPrintings(cardName);
+      setPrintingResults(results);
+    } catch (nextError) {
+      setPrintingError(nextError instanceof Error ? nextError.message : 'Failed to load printings');
+      setPrintingResults([]);
+    } finally {
+      setPrintingLoading(false);
+    }
+  };
+
+  const handleOpenPrintingPicker = (section: DeckSection, cardName: string) => {
+    setPrintingPicker({ section, cardName });
+    void loadPrintings(cardName);
+  };
+
+  const handleChoosePrinting = (card: ScryfallCard) => {
+    if (!printingPicker) return;
+    updateDeck(current =>
+      setPreferredPrinting(current, printingPicker.section, printingPicker.cardName, toPreferredPrinting(card))
+    );
+    setPrintingPicker(null);
+    setPrintingResults([]);
+    setPrintingError(null);
+  };
+
+  const handleClearPrinting = (section: DeckSection, cardName: string) => {
+    updateDeck(current => clearPreferredPrinting(current, section, cardName));
+    if (printingPicker?.section === section && printingPicker.cardName === cardName) {
+      setPrintingPicker(null);
+      setPrintingResults([]);
+      setPrintingError(null);
+    }
+  };
+
+  const activePrintingEntry = printingPicker && deck
+    ? deck[printingPicker.section].find(entry => entry.cardName.toLowerCase() === printingPicker.cardName.toLowerCase()) ?? null
+    : null;
 
   if (initialLoading) {
     return (
@@ -268,6 +303,8 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
             onRemove={handleRemove}
+            onChoosePrinting={handleOpenPrintingPicker}
+            onClearPrinting={handleClearPrinting}
           />
           <DeckSectionView
             title="Mainboard"
@@ -276,6 +313,8 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
             onRemove={handleRemove}
+            onChoosePrinting={handleOpenPrintingPicker}
+            onClearPrinting={handleClearPrinting}
           />
           <DeckSectionView
             title="Sideboard"
@@ -284,6 +323,8 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
             onRemove={handleRemove}
+            onChoosePrinting={handleOpenPrintingPicker}
+            onClearPrinting={handleClearPrinting}
           />
           <DeckSectionView
             title="Maybeboard"
@@ -292,6 +333,8 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
             onRemove={handleRemove}
+            onChoosePrinting={handleOpenPrintingPicker}
+            onClearPrinting={handleClearPrinting}
           />
         </div>
 
@@ -300,6 +343,24 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
           <DeckValidationPanel deck={deck} />
         </div>
       </div>
+
+      {printingPicker && (
+        <PrintingPickerModal
+          cardName={printingPicker.cardName}
+          currentPrintingId={activePrintingEntry?.preferredPrinting?.scryfallId ?? null}
+          loading={printingLoading}
+          printings={printingResults}
+          error={printingError}
+          onClose={() => {
+            setPrintingPicker(null);
+            setPrintingResults([]);
+            setPrintingError(null);
+          }}
+          onRefresh={() => void loadPrintings(printingPicker.cardName)}
+          onChoose={handleChoosePrinting}
+          onClear={() => handleClearPrinting(printingPicker.section, printingPicker.cardName)}
+        />
+      )}
     </div>
   );
 }

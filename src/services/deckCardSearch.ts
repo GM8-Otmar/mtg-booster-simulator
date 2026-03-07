@@ -25,3 +25,19 @@ export async function searchDeckCards(query: string): Promise<ScryfallCard[]> {
 
   return response.data.data ?? [];
 }
+
+export async function searchCardPrintings(cardName: string): Promise<ScryfallCard[]> {
+  const trimmed = cardName.trim();
+  if (!trimmed) return [];
+
+  const response = await client.get<SearchResponse>('/cards/search', {
+    params: {
+      q: `!"${trimmed}" game:paper`,
+      unique: 'prints',
+      order: 'released',
+      dir: 'desc',
+    },
+  });
+
+  return response.data.data ?? [];
+}
