@@ -168,7 +168,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   // ── Socket setup ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const sock = io(SOCKET_URL);
+    const sock = io(SOCKET_URL, { transports: ['websocket'] });
     socketRef.current = sock;
 
     sock.on('connect', () => {

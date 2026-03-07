@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useGameTable } from '../../contexts/GameTableContext';
 import { createSandboxGame } from '../../utils/sandboxGame';
 
@@ -24,6 +24,13 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
   // Sandbox fields
   const [sandboxName, setSandboxName] = useState('You');
   const [sandboxPlayers, setSandboxPlayers] = useState<1 | 2 | 3 | 4>(1);
+  const [copied, setCopied] = useState(false);
+
+  const copyCode = useCallback((code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, []);
 
   const handleCreate = async () => {
     if (!createName.trim()) return;
@@ -124,7 +131,14 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
             {roomCode && (
               <div className="text-center">
                 <p className="text-cream-muted text-xs mb-1">Room code — share with friends:</p>
-                <p className="text-3xl font-mono font-bold tracking-widest text-cyan">{roomCode}</p>
+                <button
+                  onClick={() => copyCode(roomCode)}
+                  className="text-3xl font-mono font-bold tracking-widest text-cyan hover:text-cyan/80 transition-colors cursor-pointer select-all"
+                  title="Click to copy"
+                >
+                  {roomCode}
+                </button>
+                <p className="text-xs text-cream-muted mt-1">{copied ? '✓ Copied!' : 'Click to copy'}</p>
               </div>
             )}
           </div>

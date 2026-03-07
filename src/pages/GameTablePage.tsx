@@ -32,6 +32,13 @@ export default function GameTablePage() {
   const [atTable, setAtTable] = useState(false);
   const [showImportAfterJoin, setShowImportAfterJoin] = useState(false);
   const [showLibrarySearch, setShowLibrarySearch] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  const copyRoomCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
+  };
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -134,9 +141,14 @@ export default function GameTablePage() {
               🧪 SANDBOX
             </span>
           ) : (gameRoomId && room.code && (
-            <span className="text-cream-muted text-sm">
+            <button
+              onClick={() => copyRoomCode(room.code)}
+              className="text-cream-muted text-sm hover:text-cream transition-colors cursor-pointer"
+              title="Click to copy room code"
+            >
               Code: <span className="font-mono font-bold text-cyan">{room.code}</span>
-            </span>
+              <span className="ml-1 text-xs">{codeCopied ? '✓' : '⎘'}</span>
+            </button>
           ))}
         </div>
         {/* Zone count HUD — center of top bar */}
