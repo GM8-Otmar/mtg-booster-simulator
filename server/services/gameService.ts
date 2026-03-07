@@ -144,6 +144,7 @@ export async function importDeck(
 
   const player = room.players[playerId];
   if (!player) throw new Error('Player not found');
+  if (!deck.commander) throw new Error('Commander is required for deck import');
 
   // resolve names via Scryfall unless provided
   const allEntries = [

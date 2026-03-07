@@ -24,7 +24,7 @@ export default function CardHoverInspector() {
   if (!hoveredCard) return null;
 
   return (
-    <div className="fixed top-14 right-4 z-[100] w-[360px] pointer-events-none">
+    <div className="fixed top-14 right-4 z-[10050] w-[360px] pointer-events-none">
       <div className="bg-navy/95 border border-cyan-dim/50 rounded-xl shadow-2xl overflow-hidden backdrop-blur-sm">
         {/* Card image */}
         <div className="relative rounded-t-xl overflow-hidden">

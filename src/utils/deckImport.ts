@@ -82,6 +82,16 @@ export function parseArenaFormat(text: string): ParsedDeck {
     pushEntry(result, section, entry);
   }
 
+  // Arena Commander/Brawl exports commonly put the commander in sideboard.
+  // If no Commander section exists, infer a single-card sideboard as commander.
+  if (!result.commander && result.sideboard.length > 0) {
+    const singletons = result.sideboard.filter(entry => entry.count === 1);
+    if (singletons.length === 1) {
+      result.commander = singletons[0]!.name;
+      result.sideboard = result.sideboard.filter(entry => entry.name !== singletons[0]!.name);
+    }
+  }
+
   return result;
 }
 

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { GameAction } from '../../types/game';
+import { useGameTable } from '../../contexts/GameTableContext';
+import { useCardInspector } from './CardInspectorPanel';
 
 interface GameActionLogProps {
   actions: GameAction[];
@@ -36,11 +38,42 @@ function formatTime(iso: string): string {
 
 export default function GameActionLog({ actions }: GameActionLogProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const { room } = useGameTable();
+  const { hoverInspect, clearHoverInspect } = useCardInspector();
 
   // Auto-scroll to bottom on new actions
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [actions.length]);
+
+  const cardByName = (name: string) => {
+    if (!room) return null;
+    return Object.values(room.cards).find(card => card.name === name) ?? null;
+  };
+
+  const renderDescription = (action: GameAction) => {
+    if (action.type !== 'zone_change') return action.description;
+    const movedMatch = action.description.match(/^(.*? moved )(.+?)( to .+)$/);
+    const arrowMatch = action.description.match(/^(.*?: )(.+?)( → .+)$/);
+    const match = movedMatch ?? arrowMatch;
+    if (!match) return action.description;
+    const cardName = match[2] ?? '';
+    const card = cardByName(cardName);
+    if (!card) return action.description;
+    return (
+      <>
+        {match[1]}
+        <span
+          className="underline decoration-dotted underline-offset-2 cursor-help"
+          onMouseEnter={() => hoverInspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId })}
+          onMouseLeave={clearHoverInspect}
+        >
+          {cardName}
+        </span>
+        {match[3]}
+      </>
+    );
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -53,7 +86,7 @@ export default function GameActionLog({ actions }: GameActionLogProps) {
             <div key={action.id} className="py-1 border-b border-cream/5 last:border-b-0">
               <span className="text-[9px] text-cream font-mono block">{formatTime(action.timestamp)}</span>
               <p className={`text-xs leading-snug break-words mt-0.5 ${ACTION_COLORS[action.type] ?? 'text-cream-muted'}`}>
-                {action.description}
+                {renderDescription(action)}
               </p>
             </div>
           ))

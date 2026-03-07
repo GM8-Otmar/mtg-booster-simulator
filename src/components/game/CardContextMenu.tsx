@@ -26,8 +26,8 @@ interface MenuItem {
 export default function CardContextMenu({ card, x, y, onClose, selectedCards }: CardContextMenuProps) {
   const {
     changeZone, bulkChangeZone, tapCard, bulkTapCards, setFaceDown, transformCard,
-    addCounter, bulkAddCounter, resetCounters, notifyCommanderCast,
-    createToken, revealCards, startTargeting, effectivePlayerId: playerId,
+    addCounter, bulkAddCounter, resetCounters, notifyCommanderCast, setCommanderTax,
+    createToken, revealCards, startTargeting, effectivePlayerId: playerId, myPlayer,
   } = useGameTable();
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -274,7 +274,29 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
         items: [
           {
             label: 'Cast Commander (pay tax)',
-            action: () => do_(() => notifyCommanderCast(card.instanceId)),
+            action: () => do_(() => {
+              notifyCommanderCast(card.instanceId);
+              changeZone(card.instanceId, 'battlefield');
+            }),
+          },
+          {
+            label: 'Increase Tax (+2)',
+            action: () => do_(() => setCommanderTax((myPlayer?.commanderTax ?? 0) + 1)),
+          },
+          {
+            label: 'Decrease Tax (-2)',
+            action: () => do_(() => setCommanderTax(Math.max(0, (myPlayer?.commanderTax ?? 0) - 1))),
+          },
+          {
+            label: 'Set Commander Tax…',
+            action: () => do_(() => {
+              const currentTax = myPlayer?.commanderTax ?? 0;
+              const raw = window.prompt('Set commander tax cast count (0 = no tax):', String(currentTax));
+              if (raw == null) return;
+              const next = Number.parseInt(raw, 10);
+              if (Number.isNaN(next)) return;
+              setCommanderTax(Math.max(0, next));
+            }),
           },
         ],
       });

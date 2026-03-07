@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BattlefieldCard, GameZone } from '../../types/game';
 import CardContextMenu from './CardContextMenu';
 import { useGameTable } from '../../contexts/GameTableContext';
@@ -9,6 +9,8 @@ interface GraveyardPileProps {
   label?: string;
   borderColor?: string;
   dropZone?: string;
+  enableModal?: boolean;
+  onTopCardToBattlefield?: (card: BattlefieldCard) => void;
 }
 
 const BULK_ZONES: { label: string; zone: GameZone; toIndex?: number }[] = [
@@ -25,12 +27,22 @@ export default function GraveyardPile({
   label = 'GY',
   borderColor = 'border-cyan-dim/60',
   dropZone = 'graveyard',
+  enableModal = true,
+  onTopCardToBattlefield,
 }: GraveyardPileProps) {
   const { changeZone } = useGameTable();
   const { hoverInspect, clearHoverInspect } = useCardInspector();
   const [expanded, setExpanded] = useState(false);
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [topDrag, setTopDrag] = useState<{
+    instanceId: string;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
 
   const topCard = cards[cards.length - 1] ?? null;
 
@@ -64,19 +76,110 @@ export default function GraveyardPile({
   // Zones shown in the bulk bar — exclude the zone this pile represents
   const bulkZones = BULK_ZONES.filter(z => z.zone !== dropZone);
 
+  const moveTopToBattlefield = () => {
+    if (!topCard) return;
+    if (onTopCardToBattlefield) {
+      onTopCardToBattlefield(topCard);
+    } else {
+      changeZone(topCard.instanceId, 'battlefield');
+    }
+  };
+
+  useEffect(() => {
+    if (!topDrag) return;
+
+    const clearZoneHighlights = () => {
+      document.querySelectorAll('[data-drop-zone]').forEach(el => {
+        (el as HTMLElement).style.outline = '';
+      });
+    };
+
+    const onMove = (e: PointerEvent) => {
+      setTopDrag(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : prev);
+      const dx = e.clientX - topDrag.startX;
+      const dy = e.clientY - topDrag.startY;
+      if (Math.sqrt(dx * dx + dy * dy) < 4) return;
+      clearZoneHighlights();
+      const hits = document.elementsFromPoint(e.clientX, e.clientY);
+      const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
+      if (zoneEl) {
+        zoneEl.style.outline = '3px solid rgba(0, 220, 255, 0.85)';
+      }
+    };
+
+    const onUp = (e: PointerEvent) => {
+      const dx = e.clientX - topDrag.startX;
+      const dy = e.clientY - topDrag.startY;
+      const moved = Math.sqrt(dx * dx + dy * dy) >= 4;
+      clearZoneHighlights();
+      if (moved) {
+        const hits = document.elementsFromPoint(e.clientX, e.clientY);
+        const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
+        if (zoneEl) {
+          const zone = zoneEl.dataset.dropZone as GameZone;
+          changeZone(topDrag.instanceId, zone, zone === 'library' ? 0 : undefined);
+        }
+        suppressClickRef.current = true;
+        window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+      }
+      setTopDrag(null);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      clearZoneHighlights();
+    };
+  }, [topDrag, changeZone]);
+
   return (
-    <div className="flex flex-col items-center gap-1" data-drop-zone={dropZone}>
+    <div
+      className="flex flex-col items-center gap-1"
+      data-drop-zone={dropZone}
+    >
       {/* Pile face */}
       <div
-        className={`relative w-16 h-[90px] rounded-md border-2 ${borderColor} cursor-pointer overflow-hidden shadow-md`}
-        onClick={() => cards.length > 0 && setExpanded(v => !v)}
-        title={`${label} — ${cards.length} card${cards.length !== 1 ? 's' : ''}`}
+        className={`relative w-16 h-[90px] rounded-md border-2 ${borderColor} ${topCard ? 'cursor-grab' : 'cursor-pointer'} overflow-hidden shadow-md`}
+        onDragStart={e => e.preventDefault()}
+        onPointerDown={e => {
+          if (!topCard || e.button !== 0) return;
+          setTopDrag({
+            instanceId: topCard.instanceId,
+            startX: e.clientX,
+            startY: e.clientY,
+            x: e.clientX,
+            y: e.clientY,
+          });
+        }}
+        onClick={() => {
+          if (suppressClickRef.current) return;
+          if (!enableModal || cards.length === 0) return;
+          setExpanded(v => !v);
+        }}
+        onDoubleClick={() => moveTopToBattlefield()}
+        onContextMenu={e => {
+          if (!topCard) return;
+          e.preventDefault();
+          e.stopPropagation();
+          setMenuInfo({ card: topCard, x: e.clientX, y: e.clientY });
+        }}
+        onMouseEnter={() => {
+          if (!topCard) return;
+          hoverInspect({ name: topCard.name, imageUri: topCard.imageUri ?? null, instanceId: topCard.instanceId });
+        }}
+        onMouseLeave={clearHoverInspect}
+        title={`${label} — ${cards.length} card${cards.length !== 1 ? 's' : ''}${topCard ? ' · double-click: top to battlefield' : ''}`}
       >
         {topCard?.imageUri ? (
           <img
             src={topCard.imageUri}
             alt={topCard.name}
             className="w-full h-full object-cover"
+            draggable={false}
             onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         ) : (
@@ -93,7 +196,7 @@ export default function GraveyardPile({
       <p className="text-[10px] text-cream-muted">{label} ({cards.length})</p>
 
       {/* Expanded list */}
-      {expanded && cards.length > 0 && (
+      {enableModal && expanded && cards.length > 0 && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
           onClick={onClose}
@@ -186,6 +289,26 @@ export default function GraveyardPile({
           y={menuInfo.y}
           onClose={() => setMenuInfo(null)}
         />
+      )}
+
+      {topDrag && topCard && (
+        <div
+          className="fixed z-[12000] pointer-events-none w-16 h-[90px] rounded-md border-2 border-cyan shadow-2xl overflow-hidden opacity-90"
+          style={{ left: topDrag.x - 32, top: topDrag.y - 45 }}
+        >
+          {topCard.imageUri ? (
+            <img
+              src={topCard.imageUri}
+              alt={topCard.name}
+              className="w-full h-full object-cover"
+              draggable={false}
+            />
+          ) : (
+            <div className="w-full h-full bg-navy-light flex items-center justify-center p-1">
+              <span className="text-[9px] text-cream text-center">{topCard.name}</span>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

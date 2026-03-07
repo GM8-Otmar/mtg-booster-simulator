@@ -37,7 +37,7 @@ export default function BattlefieldZone({
   isOwnBattlefield = false,
 }: BattlefieldZoneProps) {
   const {
-    bulkTapCards, bulkChangeZone, moveCard, effectivePlayerId: playerId,
+    bulkTapCards, bulkChangeZone, moveCard, changeZone, effectivePlayerId: playerId,
     isTargetingMode, cancelTargeting,
     shakeCards,
   } = useGameTable();
@@ -296,6 +296,20 @@ export default function BattlefieldZone({
     e.preventDefault();
   }, []);
 
+  const onZoneDragOver = useCallback((e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('application/x-mtg-instance-id')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    }
+  }, []);
+
+  const onZoneDrop = useCallback((e: React.DragEvent) => {
+    const instanceId = e.dataTransfer.getData('application/x-mtg-instance-id');
+    if (!instanceId) return;
+    e.preventDefault();
+    changeZone(instanceId, 'battlefield');
+  }, [changeZone]);
+
   const hasSelection = selectedIds.size > 0;
   const isMultiDragging = multiDrag !== null;
   const selectedCards = hasSelection ? cards.filter(c => selectedIds.has(c.instanceId)) : undefined;
@@ -304,9 +318,12 @@ export default function BattlefieldZone({
     <div
       ref={containerRef}
       data-battlefield={isOwnBattlefield ? 'mine' : undefined}
+      data-drop-zone={isOwnBattlefield ? 'battlefield' : undefined}
       className={`relative ${heightClass} bg-navy-light/30 rounded-xl border border-cyan-dim/30 overflow-hidden`}
       onPointerDown={onPointerDown}
       onContextMenu={onContextMenu}
+      onDragOver={onZoneDragOver}
+      onDrop={onZoneDrop}
       style={{ userSelect: 'none' }}
     >
       {/* Background grid */}

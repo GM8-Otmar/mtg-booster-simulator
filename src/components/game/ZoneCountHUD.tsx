@@ -1,4 +1,4 @@
-import { Hand, Skull, Hexagon } from 'lucide-react';
+import { Hand, Skull, Hexagon, Heart } from 'lucide-react';
 import { useGameTable } from '../../contexts/GameTableContext';
 
 /**
@@ -27,6 +27,14 @@ export default function ZoneCountHUD() {
               title={p.playerName}
             >
               {p.playerName}
+            </span>
+
+            {/* Life */}
+            <span className="flex items-center gap-0.5" title="Life">
+              <Heart className="w-3 h-3 text-red-400 fill-red-400 shrink-0" />
+              <span className={`font-bold tabular-nums ${isMe ? 'text-cream' : 'text-cream-muted'}`}>
+                {p.life}
+              </span>
             </span>
 
             {/* Hand */}

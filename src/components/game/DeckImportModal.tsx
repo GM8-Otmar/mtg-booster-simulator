@@ -29,6 +29,10 @@ export default function DeckImportModal({ onClose, sealedPlayer }: DeckImportMod
         setParseError('No cards found. Paste Arena-format deck list.');
         return;
       }
+      if (!parsed.commander) {
+        setParseError('Commander not found. Include a Commander section (or sideboard singleton commander).');
+        return;
+      }
       setPreview({ mainboard: count, commander: parsed.commander });
     } catch {
       setParseError('Could not parse deck. Use Arena export format.');
@@ -66,6 +70,10 @@ export default function DeckImportModal({ onClose, sealedPlayer }: DeckImportMod
       parsed = parseArenaFormat(deckText);
       if (deckCardCount(parsed) === 0) {
         setParseError('No cards found.');
+        return;
+      }
+      if (!parsed.commander) {
+        setParseError('Commander not found. Include a Commander section (or sideboard singleton commander).');
         return;
       }
     } catch {

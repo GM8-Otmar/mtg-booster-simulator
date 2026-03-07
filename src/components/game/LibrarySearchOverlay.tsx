@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { BattlefieldCard } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
 import { getCachedOracle, prefetchOracles } from '../../utils/scryfallOracle';
+import { useCardInspector } from './CardInspectorPanel';
 
 interface LibrarySearchOverlayProps {
   onClose: () => void;
@@ -39,6 +40,7 @@ function scoreMatch(card: BattlefieldCard, query: string): number {
 
 export default function LibrarySearchOverlay({ onClose }: LibrarySearchOverlayProps) {
   const { room, myPlayer, changeZone, shuffleLibrary } = useGameTable();
+  const { hoverInspect, clearHoverInspect } = useCardInspector();
   const [query, setQuery] = useState('');
   const [prefetching, setPrefetching] = useState(false);
   const [prefetchDone, setPrefetchDone] = useState(false);
@@ -95,6 +97,11 @@ export default function LibrarySearchOverlay({ onClose }: LibrarySearchOverlayPr
 
   const handleSendToTop = (instanceId: string) => {
     changeZone(instanceId, 'library', 0);
+    onClose();
+  };
+
+  const handleSendToBattlefield = (instanceId: string) => {
+    changeZone(instanceId, 'battlefield');
     onClose();
   };
 
@@ -155,6 +162,8 @@ export default function LibrarySearchOverlay({ onClose }: LibrarySearchOverlayPr
                 <div
                   key={`${card.instanceId}-${i}`}
                   className="flex items-center gap-3 px-4 py-2 hover:bg-navy-light group"
+                  onMouseEnter={() => hoverInspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId })}
+                  onMouseLeave={clearHoverInspect}
                 >
                   {/* Thumbnail */}
                   <div className="shrink-0 w-8 h-11 rounded overflow-hidden border border-cyan-dim/30">
@@ -185,6 +194,13 @@ export default function LibrarySearchOverlay({ onClose }: LibrarySearchOverlayPr
 
                   {/* Actions — shown on hover */}
                   <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button
+                      onClick={() => handleSendToBattlefield(card.instanceId)}
+                      className="text-[10px] px-2 py-0.5 rounded border border-emerald-400/50 text-emerald-300 hover:text-emerald-200 hover:bg-emerald-400/10 transition-colors"
+                      title="Send to battlefield"
+                    >
+                      BF
+                    </button>
                     <button
                       onClick={() => handleSendToTop(card.instanceId)}
                       className="text-[10px] px-2 py-0.5 rounded border border-cyan-dim text-cream-muted hover:text-cream hover:border-cyan transition-colors"

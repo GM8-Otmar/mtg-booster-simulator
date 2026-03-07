@@ -47,13 +47,11 @@ export default function BottomBar({
       <div className="shrink-0 flex items-center gap-2 px-2 border-r border-cyan-dim/20">
         <GraveyardPile cards={graveyardCards} />
         <ExilePile cards={exileCards} />
-        {commandCards.length > 0 && (
-          <CommandZone
-            cards={commandCards}
-            commanderTax={commanderTax}
-            playerId={playerId}
-          />
-        )}
+        <CommandZone
+          cards={commandCards}
+          commanderTax={commanderTax}
+          playerId={playerId}
+        />
       </div>
 
       {/* ── Center section: Hand ─────────────────────────────────────── */}
