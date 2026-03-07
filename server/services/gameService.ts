@@ -110,12 +110,14 @@ async function resolveNames(
     try {
       const resp = await axios.post(`${SCRYFALL_API}/cards/collection`, { identifiers: chunk });
       for (const card of resp.data.data ?? []) {
+        const scryfallImg = (id: string, face: 'front' | 'back') =>
+          `https://cards.scryfall.io/normal/${face}/${id[0]}/${id[1]}/${id}.jpg`;
         const imageUri = card.id
-          ? `/api/cardimg/${card.id}`
+          ? scryfallImg(card.id, 'front')
           : (card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null);
         // DFC back face: check if card has two faces
         const hasDFC = card.card_faces && card.card_faces.length >= 2;
-        const backImageUri = hasDFC && card.id ? `/api/cardimg/${card.id}?face=back` : null;
+        const backImageUri = hasDFC && card.id ? scryfallImg(card.id, 'back') : null;
         const backName = hasDFC ? card.card_faces[1].name : null;
         const resolved: ResolvedCard = { scryfallId: card.id, imageUri, backImageUri, backName };
         result.set(card.name.toLowerCase(), resolved);
