@@ -622,6 +622,173 @@ That is the central design mistake.
 
 ---
 
+## Implementation Context For Future Agents
+
+This section exists to reduce exploration cost. A future agent should not need to scan the entire repo to start this work.
+
+### Read these files first
+
+#### 1. `src/utils/deckImport.ts`
+Why it matters:
+- this is the current Arena-format parser
+- it already handles commander inference in some sideboard-style cases
+- it is the current import compatibility layer
+
+What to do with it:
+- keep the parsing knowledge
+- do not treat `ParsedDeck` as the final deck domain model
+- likely wrap or evolve this into `deckArena.ts` / `deckRecord` conversion utilities
+
+#### 2. `src/utils/deckExport.ts`
+Why it matters:
+- this is the current text export path
+- it already knows how to generate Arena-style output
+
+What to do with it:
+- preserve the export capability
+- move it behind the canonical `DeckRecord` model instead of raw ad hoc card arrays
+
+#### 3. `src/components/game/DeckImportModal.tsx`
+Why it matters:
+- this is the current game-table deck import UX
+- it shows how deck text is parsed and handed into game import today
+
+What to do with it:
+- treat it as a compatibility entry point, not the long-term deck UX
+- mine it for behavior, then shrink or replace it
+
+#### 4. `src/components/sealed/PoolView.tsx`
+Why it matters:
+- this is the current manual-ish deck construction surface
+- it already manages deck counts, card add/remove, basics, and deck summaries
+
+What to do with it:
+- reuse patterns and interaction ideas
+- do not duplicate its private deck representation in the new system
+- eventually convert sealed output into a shared `DeckRecord`
+
+#### 5. `src/contexts/GameTableContext.tsx`
+Why it matters:
+- this is the client entry point for creating/joining games and importing decks
+- `importDeck` and `importCommander` flow through here
+
+What to do with it:
+- this file will need integration updates once the deck platform emits richer deck payloads
+- do not put deck-library state in here; this is still game state, not deck-domain state
+
+#### 6. `server/services/gameService.ts`
+Why it matters:
+- this is the current authoritative game import implementation
+- it resolves card names through Scryfall
+- it creates the actual in-game card instances
+- it already handles commander placement into command zone
+
+What to do with it:
+- extend it to accept richer deck card inputs
+- preserve the current name-based fallback path
+- keep this as the place where final game-import normalization happens
+
+#### 7. `server/routes/games.ts`
+Why it matters:
+- this is the HTTP boundary for deck import into game rooms
+
+What to do with it:
+- update request payload shapes here when the deck platform starts sending richer deck records or resolved deck entries
+
+#### 8. `src/types/card.ts`
+Why it matters:
+- this defines current Scryfall card shapes used throughout the frontend
+
+What to do with it:
+- do not overload `ScryfallCard` into becoming a saved deck document type
+- deck types should live separately in `src/types/deck.ts`
+
+#### 9. `src/api/scryfall.ts`
+Why it matters:
+- current app-facing Scryfall access lives here
+- useful reference for search/result normalization and printing support
+
+What to do with it:
+- reuse query logic patterns
+- do not directly bind builder UI to these raw shapes if a normalized deck search service is introduced
+
+#### 10. `src/App.tsx`
+Why it matters:
+- this is where top-level app modes are currently chosen
+
+What to do with it:
+- if Deck Library becomes a top-level mode, this file will need navigation changes early
+
+### Files that matter later, not first
+
+These files are relevant, but they are not the first thing an implementer should open:
+- `src/components/game/GameLobby.tsx`
+- `src/pages/GameTablePage.tsx`
+- `server/types/game.ts`
+- `src/components/game/CardInspectorPanel.tsx`
+
+Reason:
+- they matter for integration and UX polish
+- they are not where the deck domain should be born
+
+### Files that should not become the architecture
+
+Future implementers should resist building the system directly inside these:
+- `DeckImportModal.tsx`
+- `PoolView.tsx`
+- `GameTableContext.tsx`
+
+Why:
+- they are consumers of deck behavior, not the correct owners of deck architecture
+
+### Recommended implementation order for code reading
+
+If another agent needs the minimum useful reading order, it should be:
+1. `src/utils/deckImport.ts`
+2. `src/utils/deckExport.ts`
+3. `server/services/gameService.ts`
+4. `src/components/game/DeckImportModal.tsx`
+5. `src/components/sealed/PoolView.tsx`
+6. `src/contexts/GameTableContext.tsx`
+7. `src/App.tsx`
+
+That is enough to understand:
+- current deck ingestion
+- current deck export
+- current game import
+- current manual deck-ish construction
+- where the new deck mode will plug into the app
+
+### New files that should probably be introduced rather than avoided
+
+To keep the subsystem clean, the implementation should prefer introducing dedicated files instead of cramming behavior into old ones.
+
+High-confidence additions:
+- `src/types/deck.ts`
+- `src/utils/deckArena.ts`
+- `src/utils/deckValidation.ts`
+- `src/utils/deckSummary.ts`
+- `src/utils/deckMigration.ts`
+- `src/services/deckStorage.ts`
+- `src/services/deckFileSystem.ts`
+- `src/services/deckSerialization.ts`
+- `src/services/deckCardSearch.ts`
+- `src/services/deckPrintingService.ts`
+- `src/pages/DeckLibraryPage.tsx`
+- `src/pages/DeckBuilderPage.tsx`
+- `src/components/decks/*`
+
+### Current truths another agent should not rediscover
+
+- Arena import already exists, but only as a parser and temporary import UX.
+- Commander import already exists in the game layer, including command-zone placement.
+- Sealed already has a partial deckbuilding interaction model, but it is not canonical.
+- The app is browser-first, not Electron/Tauri.
+- Local persistence for games and events exists, but not for deck documents.
+- The right path is to create a deck subsystem, not to "improve the modal."
+
+---
+
 ## Desired End State
 
 We need a unified deck platform inside the app with three major surfaces:
