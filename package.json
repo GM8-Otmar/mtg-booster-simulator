@@ -11,10 +11,11 @@
     "build:server": "tsc -p tsconfig.server.json && node -e \"require('fs').writeFileSync('dist-server/package.json', '{\\\"type\\\":\\\"commonjs\\\"}')\"",
     "start": "node dist-server/index.js",
     "lint": "eslint .",
-    "preview": "vite preview",
+    "preview": "npm run build && wrangler dev",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@types/cors": "^2.8.19",
@@ -33,6 +34,7 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.26.1",
     "@eslint/js": "^9.39.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@testing-library/jest-dom": "^6.9.1",
@@ -54,6 +56,7 @@
     "tsx": "^4.21.0",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "wrangler": "^4.71.0"
   }
 }
