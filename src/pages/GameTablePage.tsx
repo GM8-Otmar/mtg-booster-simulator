@@ -14,10 +14,17 @@ import CardHoverInspector from '../components/game/CardHoverInspector';
 import LibrarySearchOverlay from '../components/game/LibrarySearchOverlay';
 import TargetingOverlay from '../components/game/TargetingOverlay';
 import OpponentInfoPanel from '../components/game/OpponentInfoPanel';
+import type { DeckRecord } from '../types/deck';
 import type { BattlefieldCard } from '../types/game';
+import { deckRecordToParsedDeck } from '../utils/deckArena';
 import { CardInspectorProvider } from '../components/game/CardInspectorPanel';
 
-export default function GameTablePage() {
+interface GameTablePageProps {
+  pendingDeck?: DeckRecord | null;
+  onPendingDeckConsumed?: () => void;
+}
+
+export default function GameTablePage({ pendingDeck, onPendingDeckConsumed }: GameTablePageProps) {
   const {
     room, playerId, leaveGame,
     myPlayer, myHandCards, myBattlefieldCards,
@@ -27,12 +34,14 @@ export default function GameTablePage() {
     concede, connected, gameRoomId, isSandbox,
     activeSandboxPlayerId, setActiveSandboxPlayer,
     passTurn, isMyTurn,
+    importDeck,
   } = useGameTable();
 
   const [atTable, setAtTable] = useState(false);
   const [showImportAfterJoin, setShowImportAfterJoin] = useState(false);
   const [showLibrarySearch, setShowLibrarySearch] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [pendingDeckImported, setPendingDeckImported] = useState(false);
 
   const copyRoomCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -94,12 +103,40 @@ export default function GameTablePage() {
     prevIsMyTurnRef.current = isMyTurn;
   }, [isMyTurn, atTable]);
 
+  useEffect(() => {
+    if (!pendingDeck) {
+      setPendingDeckImported(false);
+      return;
+    }
+
+    if (!atTable || !room || !playerId || isSandbox || pendingDeckImported) {
+      return;
+    }
+
+    let cancelled = false;
+
+    importDeck(deckRecordToParsedDeck(pendingDeck))
+      .then(() => {
+        if (cancelled) return;
+        setPendingDeckImported(true);
+        onPendingDeckConsumed?.();
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPendingDeckImported(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [atTable, importDeck, isSandbox, onPendingDeckConsumed, pendingDeck, pendingDeckImported, playerId, room]);
+
   if (!room || !atTable) {
     return (
       <GameLobby
         onEnterTable={(sandbox) => {
           setAtTable(true);
-          setShowImportAfterJoin(!sandbox);
+          setShowImportAfterJoin(!sandbox && !pendingDeck);
         }}
       />
     );

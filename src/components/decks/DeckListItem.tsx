@@ -8,6 +8,7 @@ import type { DeckSummary } from '../../types/deck';
 interface DeckListItemProps {
   deck: DeckSummary;
   onOpen: (deckId: string) => void;
+  onPlay: (deckId: string) => void;
   onDelete: (deckId: string) => void;
   onDuplicate: (deckId: string) => void;
   onRename: (deckId: string, newName: string) => void;
@@ -27,6 +28,7 @@ const FORMAT_LABELS: Record<string, string> = {
 export default function DeckListItem({
   deck,
   onOpen,
+  onPlay,
   onDelete,
   onDuplicate,
   onRename,
@@ -91,72 +93,78 @@ export default function DeckListItem({
       </button>
 
       <div className="p-4">
-      {editing ? (
-        <input
-          type="text"
-          value={editName}
-          onChange={e => setEditName(e.target.value)}
-          onBlur={handleRename}
-          onKeyDown={e => {
-            if (e.key === 'Enter') handleRename();
-            if (e.key === 'Escape') { setEditing(false); setEditName(deck.name); }
-          }}
-          autoFocus
-          className="w-full bg-navy border border-cyan rounded-md px-2 py-1 text-cream text-sm font-semibold focus:outline-none mb-2"
-        />
-      ) : null}
+        {editing ? (
+          <input
+            type="text"
+            value={editName}
+            onChange={e => setEditName(e.target.value)}
+            onBlur={handleRename}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleRename();
+              if (e.key === 'Escape') {
+                setEditing(false);
+                setEditName(deck.name);
+              }
+            }}
+            autoFocus
+            className="w-full bg-navy border border-cyan rounded-md px-2 py-1 text-cream text-sm font-semibold focus:outline-none mb-2"
+          />
+        ) : null}
 
-      {/* Commander */}
-      {deck.commanderNames.length > 0 && (
-        <p className="text-magenta text-xs font-medium truncate mb-1" title={deck.commanderNames.join(', ')}>
-          {deck.commanderNames.join(' & ')}
+        {deck.commanderNames.length > 0 && (
+          <p className="text-magenta text-xs font-medium truncate mb-1" title={deck.commanderNames.join(', ')}>
+            {deck.commanderNames.join(' & ')}
+          </p>
+        )}
+
+        <p className="text-cream-muted text-xs">
+          {deck.cardCount} cards
         </p>
-      )}
 
-      {/* Card count */}
-      <p className="text-cream-muted text-xs">
-        {deck.cardCount} cards
-      </p>
-
-      {/* Actions */}
-      <div className="flex gap-2 mt-3">
-        <button
-          onClick={() => onOpen(deck.id)}
-          className="flex-1 py-1.5 bg-cyan hover:bg-cyan/90 rounded-md text-xs font-semibold text-navy transition-colors"
-        >
-          Edit
-        </button>
-        <div className="relative">
+        <div className="grid grid-cols-[1fr_1fr_auto] gap-2 mt-3">
           <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="px-2 py-1.5 bg-navy hover:bg-navy-light border border-cyan-dim rounded-md text-cream-muted text-xs transition-colors"
+            onClick={() => onOpen(deck.id)}
+            className="py-1.5 bg-cyan hover:bg-cyan/90 rounded-md text-xs font-semibold text-navy transition-colors"
           >
-            ...
+            Edit
           </button>
-          {showMenu && (
-            <div className="absolute right-0 bottom-full mb-1 bg-navy-light border border-cyan-dim rounded-lg shadow-xl z-10 py-1 min-w-[120px]">
-              <button
-                onClick={() => { setShowMenu(false); setEditing(true); setEditName(deck.name); }}
-                className="w-full text-left px-3 py-1.5 text-sm text-cream hover:bg-navy transition-colors"
-              >
-                Rename
-              </button>
-              <button
-                onClick={() => { setShowMenu(false); onDuplicate(deck.id); }}
-                className="w-full text-left px-3 py-1.5 text-sm text-cream hover:bg-navy transition-colors"
-              >
-                Duplicate
-              </button>
-              <button
-                onClick={() => { setShowMenu(false); onDelete(deck.id); }}
-                className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-navy transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-          )}
+          <button
+            onClick={() => onPlay(deck.id)}
+            className="py-1.5 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 rounded-md text-xs font-semibold text-green-300 transition-colors"
+          >
+            Play
+          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="px-2 py-1.5 bg-navy hover:bg-navy-light border border-cyan-dim rounded-md text-cream-muted text-xs transition-colors"
+            >
+              ...
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 bottom-full mb-1 bg-navy-light border border-cyan-dim rounded-lg shadow-xl z-10 py-1 min-w-[120px]">
+                <button
+                  onClick={() => { setShowMenu(false); setEditing(true); setEditName(deck.name); }}
+                  className="w-full text-left px-3 py-1.5 text-sm text-cream hover:bg-navy transition-colors"
+                >
+                  Rename
+                </button>
+                <button
+                  onClick={() => { setShowMenu(false); onDuplicate(deck.id); }}
+                  className="w-full text-left px-3 py-1.5 text-sm text-cream hover:bg-navy transition-colors"
+                >
+                  Duplicate
+                </button>
+                <button
+                  onClick={() => { setShowMenu(false); onDelete(deck.id); }}
+                  className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-navy transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
       </div>
     </div>
   );

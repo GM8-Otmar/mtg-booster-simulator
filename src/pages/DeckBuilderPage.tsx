@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import DeckMetadataPanel from '../components/decks/DeckMetadataPanel';
 import DeckSearchPanel from '../components/decks/DeckSearchPanel';
 import DeckSectionView from '../components/decks/DeckSectionView';
 import DeckStatsPanel from '../components/decks/DeckStatsPanel';
@@ -13,6 +14,9 @@ import {
   changeCardCount,
   clearPreferredPrinting,
   removeCardFromSection,
+  renameDeck as renameDeckRecord,
+  setFormat as setDeckFormat,
+  setNotes as setDeckNotes,
   setCommander,
   setPreferredPrinting,
   touchUpdatedAt,
@@ -21,6 +25,7 @@ import {
 interface DeckBuilderPageProps {
   deckId: string;
   onBack: () => void;
+  onPlayDeck: (deck: DeckRecord) => void;
 }
 
 function toPreferredPrinting(card: ScryfallCard): PreferredPrinting {
@@ -39,7 +44,7 @@ function toPreferredPrinting(card: ScryfallCard): PreferredPrinting {
   };
 }
 
-export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps) {
+export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
   const { error, exportDeck, loadDeck, saveDeck } = useDeckLibrary();
   const [deck, setDeck] = useState<DeckRecord | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -212,6 +217,18 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
     ? deck[printingPicker.section].find(entry => entry.cardName.toLowerCase() === printingPicker.cardName.toLowerCase()) ?? null
     : null;
 
+  const handleNameChange = (name: string) => {
+    updateDeck(current => renameDeckRecord(current, name || 'Untitled Deck'));
+  };
+
+  const handleFormatChange = (format: DeckRecord['format']) => {
+    updateDeck(current => setDeckFormat(current, format));
+  };
+
+  const handleNotesChange = (notes: string) => {
+    updateDeck(current => setDeckNotes(current, notes));
+  };
+
   if (initialLoading) {
     return (
       <div className="min-h-screen bg-navy text-cream p-8 flex items-center justify-center">
@@ -263,6 +280,12 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
           {saveMessage && (
             <span className="text-xs text-cyan">{saveMessage}</span>
           )}
+          <button
+            onClick={() => onPlayDeck(deck)}
+            className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 rounded-lg text-sm font-semibold text-green-300"
+          >
+            Play This Deck
+          </button>
           <button
             onClick={() => exportDeck(deck)}
             className="px-4 py-2 bg-navy hover:bg-navy-light border border-cyan-dim rounded-lg text-sm font-semibold"
@@ -339,6 +362,14 @@ export default function DeckBuilderPage({ deckId, onBack }: DeckBuilderPageProps
         </div>
 
         <div className="space-y-4">
+          <DeckMetadataPanel
+            name={deck.name}
+            format={deck.format}
+            notes={deck.notes}
+            onNameChange={handleNameChange}
+            onFormatChange={handleFormatChange}
+            onNotesChange={handleNotesChange}
+          />
           <DeckStatsPanel deck={deck} />
           <DeckValidationPanel deck={deck} />
         </div>

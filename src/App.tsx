@@ -5,11 +5,13 @@ import SealedEventPage from './pages/SealedEventPage';
 import GameTablePage from './pages/GameTablePage';
 import DeckLibraryPage from './pages/DeckLibraryPage';
 import { GameTableProvider } from './contexts/GameTableContext';
+import type { DeckRecord } from './types/deck';
 
 type AppMode = 'random' | 'sealed' | 'game' | 'decks' | null;
 
 function App() {
   const [mode, setMode] = useState<AppMode>(null);
+  const [pendingDeck, setPendingDeck] = useState<DeckRecord | null>(null);
 
   if (!mode) {
     return <ModeSelector onSelectMode={setMode} />;
@@ -46,13 +48,24 @@ function App() {
   if (mode === 'game') {
     return (
       <GameTableProvider>
-        <GameTablePage />
+        <GameTablePage
+          pendingDeck={pendingDeck}
+          onPendingDeckConsumed={() => setPendingDeck(null)}
+        />
       </GameTableProvider>
     );
   }
 
   if (mode === 'decks') {
-    return <DeckLibraryPage onBack={() => setMode(null)} />;
+    return (
+      <DeckLibraryPage
+        onBack={() => setMode(null)}
+        onPlayDeck={deck => {
+          setPendingDeck(deck);
+          setMode('game');
+        }}
+      />
+    );
   }
 
   return null;

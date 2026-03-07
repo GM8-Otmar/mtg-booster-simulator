@@ -7,13 +7,15 @@
 import { useState } from 'react';
 import DeckLibrary from '../components/decks/DeckLibrary';
 import { DeckLibraryProvider } from '../contexts/DeckLibraryContext';
+import type { DeckRecord } from '../types/deck';
 import DeckBuilderPage from './DeckBuilderPage';
 
 interface DeckLibraryPageProps {
   onBack: () => void;
+  onPlayDeck: (deck: DeckRecord) => void;
 }
 
-export default function DeckLibraryPage({ onBack }: DeckLibraryPageProps) {
+export default function DeckLibraryPage({ onBack, onPlayDeck }: DeckLibraryPageProps) {
   const [openDeckId, setOpenDeckId] = useState<string | null>(null);
 
   return (
@@ -22,6 +24,7 @@ export default function DeckLibraryPage({ onBack }: DeckLibraryPageProps) {
         <DeckBuilderPage
           deckId={openDeckId}
           onBack={() => setOpenDeckId(null)}
+          onPlayDeck={onPlayDeck}
         />
       ) : (
         <div className="min-h-screen bg-navy text-cream p-8">
@@ -32,7 +35,7 @@ export default function DeckLibraryPage({ onBack }: DeckLibraryPageProps) {
             Back
           </button>
           <div className="pt-12">
-            <DeckLibrary onOpenDeck={setOpenDeckId} />
+            <DeckLibrary onOpenDeck={setOpenDeckId} onPlayDeck={onPlayDeck} />
           </div>
         </div>
       )}

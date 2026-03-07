@@ -10,9 +10,10 @@ import NewDeckPanel from './NewDeckPanel';
 
 interface DeckLibraryProps {
   onOpenDeck: (deckId: string) => void;
+  onPlayDeck: (deck: DeckRecord) => void;
 }
 
-export default function DeckLibrary({ onOpenDeck }: DeckLibraryProps) {
+export default function DeckLibrary({ onOpenDeck, onPlayDeck }: DeckLibraryProps) {
   const {
     decks,
     loading,
@@ -22,6 +23,7 @@ export default function DeckLibrary({ onOpenDeck }: DeckLibraryProps) {
     connectFolder,
     disconnectFolder,
     importFile,
+    loadDeck,
     deleteDeck,
     duplicateDeck,
     renameDeck,
@@ -87,6 +89,15 @@ export default function DeckLibrary({ onOpenDeck }: DeckLibraryProps) {
     try {
       const deck = await importFile(file);
       onOpenDeck(deck.id);
+    } catch {
+      // Error shown via context.
+    }
+  };
+
+  const handlePlay = async (deckId: string) => {
+    try {
+      const deck = await loadDeck(deckId);
+      onPlayDeck(deck);
     } catch {
       // Error shown via context.
     }
@@ -189,6 +200,7 @@ export default function DeckLibrary({ onOpenDeck }: DeckLibraryProps) {
                 key={`recent-${deck.id}`}
                 deck={deck}
                 onOpen={onOpenDeck}
+                onPlay={handlePlay}
                 onDelete={handleDelete}
                 onDuplicate={handleDuplicate}
                 onRename={handleRename}
@@ -224,6 +236,7 @@ export default function DeckLibrary({ onOpenDeck }: DeckLibraryProps) {
                 key={deck.id}
                 deck={deck}
                 onOpen={onOpenDeck}
+                onPlay={handlePlay}
                 onDelete={handleDelete}
                 onDuplicate={handleDuplicate}
                 onRename={handleRename}
