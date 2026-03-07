@@ -117,7 +117,16 @@ export default function GraveyardPile({
         const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
         if (zoneEl) {
           const zone = zoneEl.dataset.dropZone as GameZone;
-          changeZone(topDrag.instanceId, zone, zone === 'library' ? 0 : undefined);
+          if (zone === 'battlefield') {
+            // Calculate position relative to the battlefield
+            const bfEl = zoneEl;
+            const bfRect = bfEl.getBoundingClientRect();
+            const bfX = Math.max(5, Math.min(95, ((e.clientX - bfRect.left) / bfRect.width) * 100));
+            const bfY = Math.max(5, Math.min(95, ((e.clientY - bfRect.top) / bfRect.height) * 100));
+            changeZone(topDrag.instanceId, 'battlefield', undefined, bfX, bfY);
+          } else {
+            changeZone(topDrag.instanceId, zone, zone === 'library' ? 0 : undefined);
+          }
         }
         suppressClickRef.current = true;
         window.setTimeout(() => { suppressClickRef.current = false; }, 0);

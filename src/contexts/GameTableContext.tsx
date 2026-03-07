@@ -51,6 +51,7 @@ export interface GameTableContextType {
   createGame: (playerName: string, format?: string) => Promise<string>; // returns code
   joinGame: (code: string, playerName: string) => Promise<void>;
   importDeck: (deck: ParsedDeck) => Promise<void>;
+  importCommander: (commanderName: string) => Promise<void>;
   leaveGame: () => void;
   /** Load a pre-built fake room for offline sandbox testing (no server needed) */
   loadSandbox: (room: GameRoom, sandboxPlayerId: string, sandboxPlayerName: string) => void;
@@ -61,7 +62,7 @@ export interface GameTableContextType {
 
   // game actions
   moveCard: (instanceId: string, x: number, y: number, persist: boolean) => void;
-  changeZone: (instanceId: string, toZone: GameZone, toIndex?: number) => void;
+  changeZone: (instanceId: string, toZone: GameZone, toIndex?: number, x?: number, y?: number) => void;
   reorderHand: (newHandCardIds: string[]) => void;
   /** Move multiple cards to a zone at once (avoids batching issues) */
   bulkChangeZone: (instanceIds: string[], toZone: GameZone, toIndex?: number) => void;
@@ -348,6 +349,21 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     }
   }, [gameRoomId, playerId, post]);
 
+  const importCommander = useCallback(async (commanderName: string): Promise<void> => {
+    if (!gameRoomId || !playerId) throw new Error('Not in a game');
+    setLoading(true);
+    setError(null);
+    try {
+      await post(`/${gameRoomId}/import-commander`, { playerId, commanderName });
+      socketRef.current?.emit('game:join', { gameRoomId, playerId });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to import commander');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [gameRoomId, playerId, post]);
+
   const leaveGame = useCallback(() => {
     if (socketRef.current && gameRoomId) {
       socketRef.current.emit('game:leave', { gameRoomId });
@@ -526,11 +542,11 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('card:move', { instanceId, x, y, persist });
   }, [emit]);
 
-  const changeZone = useCallback((instanceId: string, toZone: GameZone, toIndex?: number) => {
+  const changeZone = useCallback((instanceId: string, toZone: GameZone, toIndex?: number, x?: number, y?: number) => {
     const currentRoom = roomRef.current;
     if (!currentRoom?.cards[instanceId]) return;
     saveUndoSnapshot();
-    emit('card:zone', { instanceId, toZone, toIndex });
+    emit('card:zone', { instanceId, toZone, toIndex, x, y });
   }, [emit, saveUndoSnapshot]);
 
   const reorderHand = useCallback((newHandCardIds: string[]) => {
@@ -556,6 +572,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   }, [emit, saveUndoSnapshot]);
 
   const bulkChangeZone = useCallback((instanceIds: string[], toZone: GameZone, toIndex?: number) => {
+    console.log(`[MTG-BULK] bulkChangeZone called`, { count: instanceIds.length, toZone, toIndex, sandbox: isSandboxRef.current, ids: instanceIds.map(id => id.slice(0, 8)) });
     if (instanceIds.length === 0) return;
     saveUndoSnapshot();
     if (isSandboxRef.current) {
@@ -582,6 +599,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   }, [emit, saveUndoSnapshot]);
 
   const bulkTapCards = useCallback((instanceIds: string[], tapped: boolean) => {
+    console.log(`[MTG-BULK] bulkTapCards called`, { count: instanceIds.length, tapped, sandbox: isSandboxRef.current, ids: instanceIds.map(id => id.slice(0, 8)) });
     if (instanceIds.length === 0) return;
     saveUndoSnapshot();
     if (isSandboxRef.current) {
@@ -632,6 +650,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   }, [emit, saveUndoSnapshot]);
 
   const bulkAddCounter = useCallback((instanceIds: string[], counterType: string, delta: number, label?: string) => {
+    console.log(`[MTG-BULK] bulkAddCounter called`, { count: instanceIds.length, counterType, delta, label, sandbox: isSandboxRef.current, ids: instanceIds.map(id => id.slice(0, 8)) });
     if (instanceIds.length === 0) return;
     saveUndoSnapshot();
     if (isSandboxRef.current) {
@@ -973,7 +992,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       canUndo, undo,
       myPlayer, myHandCards, myBattlefieldCards, myLibraryCount,
       myGraveyardCards, myExileCards, myCommandZoneCards,
-      createGame, joinGame, importDeck, leaveGame, loadSandbox, isSandbox,
+      createGame, joinGame, importDeck, importCommander, leaveGame, loadSandbox, isSandbox,
       activeSandboxPlayerId, setActiveSandboxPlayer,
       moveCard, changeZone, reorderHand, bulkChangeZone, tapCard, bulkTapCards, tapAll, untapAll, setFaceDown, transformCard, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
       adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast, setCommanderTax,
@@ -1084,7 +1103,13 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
         const toLabel = ZONE_LABELS[payload.toZone as string] ?? payload.toZone;
         zoneDesc = `${myName}: ${cardName} → ${toLabel}`;
       }
-      return applyDelta(room, {
+      // If x,y provided (e.g. drag to battlefield), update position before zone change
+      let roomBeforeDelta = room;
+      if (payload.x != null && payload.y != null) {
+        const updatedCard = { ...roomBeforeDelta.cards[payload.instanceId]!, x: payload.x, y: payload.y };
+        roomBeforeDelta = { ...roomBeforeDelta, cards: { ...roomBeforeDelta.cards, [payload.instanceId]: updatedCard } };
+      }
+      return applyDelta(roomBeforeDelta, {
         type: 'zone_changed',
         instanceId: payload.instanceId,
         toZone: payload.toZone,

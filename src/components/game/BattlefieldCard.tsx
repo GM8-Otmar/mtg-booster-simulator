@@ -177,12 +177,14 @@ export default function BattlefieldCard({
       if (draggingRef.current) {
         const hits = document.elementsFromPoint(e.clientX, e.clientY);
         const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
+        const dropZone = zoneEl?.dataset.dropZone as GameZone | undefined;
 
-        if (zoneEl) {
-          const dropZone = zoneEl.dataset.dropZone as GameZone;
+        if (dropZone && dropZone !== card.zone) {
+          // Dropping on a DIFFERENT zone — zone change
           changeZone(card.instanceId, dropZone, dropZone === 'library' ? 0 : undefined);
           setVisualPos({ x: dragOriginRef.current.x, y: dragOriginRef.current.y });
         } else {
+          // No zone or SAME zone (e.g. dragging within battlefield) — persist position
           const container = containerRef.current;
           if (container) {
             const rect = container.getBoundingClientRect();
@@ -291,7 +293,7 @@ export default function BattlefieldCard({
           transform: card.tapped
             ? `rotate(90deg)${effectiveDragging ? ' scale(1.08)' : ''}`
             : effectiveDragging ? 'scale(1.08)' : undefined,
-          transition: effectiveDragging ? 'none' : 'transform 0.15s ease',
+          transition: effectiveDragging ? 'none' : 'left 0.08s ease, top 0.08s ease, transform 0.15s ease',
           zIndex: effectiveDragging ? 50 : isShaking ? 40 : 10,
           cursor: isTargetingMode ? 'crosshair' : effectiveDragging ? 'grabbing' : 'grab',
           boxShadow: effectiveDragging ? '0 0 20px rgba(255, 46, 136, 0.8)' : undefined,
@@ -330,6 +332,18 @@ export default function BattlefieldCard({
         {card.isCommander && (
           <div className="absolute -top-2 -right-2 bg-magenta rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow-md z-20">
             ★
+          </div>
+        )}
+
+        {card.scryfallId === 'token' && (
+          <div
+            className="absolute -top-2 -left-2 bg-magenta rounded-full w-5 h-5 flex items-center justify-center shadow-md z-20"
+            title="Token (ephemeral)"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="8" y="2" width="14" height="14" rx="2" />
+              <rect x="2" y="8" width="14" height="14" rx="2" />
+            </svg>
           </div>
         )}
 

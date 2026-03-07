@@ -250,13 +250,13 @@ export default function BattlefieldZone({
 
       const hits = document.elementsFromPoint(e.clientX, e.clientY);
       const zoneEl = hits.find(el => (el as HTMLElement).dataset?.dropZone) as HTMLElement | undefined;
+      const dropZone = zoneEl?.dataset.dropZone as GameZone | undefined;
 
-      if (zoneEl) {
-        // Send all selected to the drop zone; library always goes on top
-        const dropZone = zoneEl.dataset.dropZone as GameZone;
+      if (dropZone && dropZone !== 'battlefield') {
+        // Dropping on a DIFFERENT zone — bulk zone change
         bulkChangeZone([...drag.startPositions.keys()], dropZone, dropZone === 'library' ? 0 : undefined);
       } else {
-        // Persist final positions for all selected cards
+        // No zone or same zone (battlefield→battlefield) — persist final positions
         for (const [id, pos] of multiDragPositionsRef.current) {
           moveCard(id, pos.x, pos.y, true);
         }
@@ -307,7 +307,15 @@ export default function BattlefieldZone({
     const instanceId = e.dataTransfer.getData('application/x-mtg-instance-id');
     if (!instanceId) return;
     e.preventDefault();
-    changeZone(instanceId, 'battlefield');
+    const container = containerRef.current;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      const x = Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100));
+      const y = Math.max(5, Math.min(95, ((e.clientY - rect.top) / rect.height) * 100));
+      changeZone(instanceId, 'battlefield', undefined, x, y);
+    } else {
+      changeZone(instanceId, 'battlefield');
+    }
   }, [changeZone]);
 
   const hasSelection = selectedIds.size > 0;

@@ -78,8 +78,8 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
   // ── Zone change ───────────────────────────────────────────────────────────
 
   socket.on('card:zone', async ({
-    gameRoomId, instanceId, toZone, toIndex, playerId,
-  }: { gameRoomId: string; instanceId: string; toZone: GameZone; toIndex?: number; playerId: string }) => {
+    gameRoomId, instanceId, toZone, toIndex, playerId, x, y,
+  }: { gameRoomId: string; instanceId: string; toZone: GameZone; toIndex?: number; playerId: string; x?: number; y?: number }) => {
     const room = await storage.loadGame(gameRoomId);
     if (!room) { console.log(`[MTG-SERVER] card:zone — room not found (${gameRoomId?.slice(0, 8)})`); return; }
     const card = room.cards[instanceId];
@@ -118,6 +118,10 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     if (toZone === 'battlefield') {
       card.tapped = false;
       card.faceDown = false;
+      if (x != null && y != null) {
+        card.x = x;
+        card.y = y;
+      }
     }
 
     const toZoneKey = zoneKey(toZone);
@@ -151,6 +155,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
   socket.on('cards:zone', async ({
     gameRoomId, instanceIds, toZone, toIndex, playerId,
   }: { gameRoomId: string; instanceIds: string[]; toZone: GameZone; toIndex?: number; playerId: string }) => {
+    console.log(`[MTG-SERVER] cards:zone received`, { count: instanceIds?.length, toZone, playerId: playerId?.slice(0, 8) });
     const room = await storage.loadGame(gameRoomId);
     if (!room || !Array.isArray(instanceIds) || instanceIds.length === 0) return;
 

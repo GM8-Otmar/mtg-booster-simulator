@@ -77,4 +77,29 @@ router.post('/:gameId/import-deck', async (req: Request, res: Response) => {
   }
 });
 
+/** POST /api/games/:gameId/import-commander */
+router.post('/:gameId/import-commander', async (req: Request, res: Response) => {
+  try {
+    const { playerId, commanderName }: { playerId: string; commanderName: string } = req.body;
+    if (!playerId || !commanderName) return res.status(400).json({ error: 'playerId and commanderName required' });
+    const room = await gameService.importCommander(req.params.gameId as string, playerId, commanderName);
+    const joiningPlayer = room.players[playerId]!;
+    const joiningCards: Record<string, (typeof room.cards)[string]> = {};
+    for (const [cid, card] of Object.entries(room.cards)) {
+      if (card.controller === playerId) joiningCards[cid] = card;
+    }
+    io.to(GAME_ROOM(room.id)).emit('game:delta', {
+      type: 'player_joined',
+      player: joiningPlayer,
+      cards: joiningCards,
+      turnOrder: room.turnOrder,
+      activePlayerIndex: room.activePlayerIndex,
+    });
+    res.json({ room });
+  } catch (err) {
+    console.error('importCommander error:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to import commander' });
+  }
+});
+
 export default router;

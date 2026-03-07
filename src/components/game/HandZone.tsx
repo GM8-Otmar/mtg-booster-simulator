@@ -17,7 +17,7 @@ function HandCard({
   isSelected: boolean;
   onContextMenu: (e: React.MouseEvent) => void;
   onPlayToBattlefield: (instanceId: string, clientX: number, clientY: number) => void;
-  onSendToZone: (instanceId: string, zone: string) => void;
+  onSendToZone: (instanceId: string, zone: string, clientX: number, clientY: number) => void;
   onToggleSelect: (instanceId: string) => void;
   onReorder?: (instanceId: string, clientX: number) => void;
   onDragMove?: (instanceId: string, clientX: number) => void;
@@ -78,7 +78,7 @@ function HandCard({
       const dropZone = zoneEl?.dataset.dropZone;
 
       if (dropZone && dropZone !== 'hand') {
-        onSendToZone(card.instanceId, dropZone);
+        onSendToZone(card.instanceId, dropZone, e.clientX, e.clientY);
       } else {
         const dy = startY.current - e.clientY;
         if (dy > 60) {
@@ -288,12 +288,29 @@ export default function HandZone({ cards }: HandZoneProps) {
   }, []);
 
   // Send one card (or all selected) to any zone via drag
-  const handleSendToZone = useCallback((instanceId: string, zone: string) => {
+  const handleSendToZone = useCallback((instanceId: string, zone: string, clientX: number, clientY: number) => {
     const toSend = selectedIds.has(instanceId) && selectedIds.size > 1
       ? [...selectedIds]
       : [instanceId];
     const toIndex = zone === 'library' ? 0 : undefined;
-    toSend.forEach(id => changeZone(id, zone as GameZone, toIndex));
+
+    // If dropping on battlefield, compute position from cursor
+    if (zone === 'battlefield') {
+      const battlefield = document.querySelector('[data-battlefield="mine"]') as HTMLElement | null;
+      const bfRect = battlefield?.getBoundingClientRect();
+      toSend.forEach((id, idx) => {
+        if (bfRect) {
+          const offsetX = (idx - Math.floor(toSend.length / 2)) * 8;
+          const x = Math.max(5, Math.min(95, ((clientX - bfRect.left) / bfRect.width) * 100 + offsetX));
+          const y = Math.max(5, Math.min(95, ((clientY - bfRect.top) / bfRect.height) * 100));
+          changeZone(id, 'battlefield', undefined, x, y);
+        } else {
+          changeZone(id, 'battlefield');
+        }
+      });
+    } else {
+      toSend.forEach(id => changeZone(id, zone as GameZone, toIndex));
+    }
     setSelectedIds(new Set());
   }, [changeZone, selectedIds]);
 
@@ -307,18 +324,18 @@ export default function HandZone({ cards }: HandZoneProps) {
     const bfRect = battlefield?.getBoundingClientRect();
 
     toPlay.forEach((id, idx) => {
-      changeZone(id, 'battlefield');
       if (bfRect) {
-        // Spread cards out slightly so they don't all land on the same spot
         const offsetX = (idx - Math.floor(toPlay.length / 2)) * 8;
         const x = Math.max(5, Math.min(95, ((clientX - bfRect.left) / bfRect.width) * 100 + offsetX));
         const y = Math.max(5, Math.min(95, ((clientY - bfRect.top) / bfRect.height) * 100));
-        setTimeout(() => moveCard(id, x, y, true), 0);
+        changeZone(id, 'battlefield', undefined, x, y);
+      } else {
+        changeZone(id, 'battlefield');
       }
     });
 
     setSelectedIds(new Set());
-  }, [changeZone, moveCard, selectedIds]);
+  }, [changeZone, selectedIds]);
 
   const getReorderDropIndex = useCallback((instanceId: string, clientX: number) => {
     const handZone = document.querySelector('[data-drop-zone="hand"]') as HTMLElement | null;

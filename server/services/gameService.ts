@@ -144,7 +144,7 @@ export async function importDeck(
 
   const player = room.players[playerId];
   if (!player) throw new Error('Player not found');
-  if (!deck.commander) throw new Error('Commander is required for deck import');
+  // Commander is optional — the user may import the 99 first, then add commander separately
 
   // resolve names via Scryfall unless provided
   const allEntries = [
@@ -225,6 +225,57 @@ export async function importDeck(
       player.libraryCardIds[i]!,
     ];
   }
+
+  room.status = 'active';
+  room.lastActivity = new Date().toISOString();
+  await storage.saveGame(room);
+  return room;
+}
+
+/** Import a single commander into the command zone (without clearing the rest of the deck). */
+export async function importCommander(
+  roomId: string,
+  playerId: string,
+  commanderName: string,
+): Promise<GameRoom> {
+  const room = await storage.loadGame(roomId);
+  if (!room) throw new Error('Game not found');
+  const player = room.players[playerId];
+  if (!player) throw new Error('Player not found');
+
+  // Remove any existing commanders from command zone
+  for (const id of [...player.commandZoneCardIds]) {
+    const card = room.cards[id];
+    if (card?.isCommander) {
+      delete room.cards[id];
+      player.commandZoneCardIds = player.commandZoneCardIds.filter(cid => cid !== id);
+    }
+  }
+
+  // Resolve via Scryfall
+  const resolved = await resolveNames([{ name: commanderName, count: 1 }]);
+  const info = resolved.get(commanderName.toLowerCase()) ?? { scryfallId: 'unknown', imageUri: null };
+
+  const instanceId = uuidv4();
+  const card: BattlefieldCard = {
+    instanceId,
+    scryfallId: info.scryfallId,
+    name: commanderName,
+    imageUri: info.imageUri,
+    backImageUri: info.backImageUri ?? null,
+    backName: info.backName ?? null,
+    zone: 'command_zone',
+    controller: playerId,
+    x: 50,
+    y: 50,
+    tapped: false,
+    faceDown: false,
+    flipped: false,
+    counters: [],
+    isCommander: true,
+  };
+  room.cards[instanceId] = card;
+  player.commandZoneCardIds.push(instanceId);
 
   room.status = 'active';
   room.lastActivity = new Date().toISOString();

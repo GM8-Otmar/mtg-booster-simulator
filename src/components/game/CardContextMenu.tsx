@@ -96,7 +96,12 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
       label: 'Move all to…',
       items: zones.map(z => ({
         label: z.label,
-        action: () => { bulkChangeZone(targets.map(c => c.instanceId), z.zone, z.toIndex); onClose(); },
+        action: () => {
+          const ids = targets.map(c => c.instanceId);
+          console.log(`[MTG-BULK] Move all to ${z.zone}`, { count: ids.length, ids: ids.map(id => id.slice(0, 8)) });
+          bulkChangeZone(ids, z.zone, z.toIndex);
+          onClose();
+        },
       })),
     });
 
@@ -107,11 +112,19 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
         items: [
           {
             label: 'Counter +1 all',
-            action: () => { bulkAddCounter(bfIds, 'generic', 1); onClose(); },
+            action: () => {
+              console.log(`[MTG-BULK] Counter +1 all`, { count: bfIds.length, ids: bfIds.map(id => id.slice(0, 8)) });
+              bulkAddCounter(bfIds, 'generic', 1);
+              onClose();
+            },
           },
           {
             label: 'Counter -1 all',
-            action: () => { bulkAddCounter(bfIds, 'generic', -1); onClose(); },
+            action: () => {
+              console.log(`[MTG-BULK] Counter -1 all`, { count: bfIds.length, ids: bfIds.map(id => id.slice(0, 8)) });
+              bulkAddCounter(bfIds, 'generic', -1);
+              onClose();
+            },
           },
         ],
       });
@@ -324,6 +337,8 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
       ref={menuRef}
       className="fixed z-[9999] bg-navy-light border border-cyan-dim rounded-xl shadow-2xl text-sm overflow-hidden"
       style={{ ...adjustedStyle, width: 220 }}
+      onPointerDown={e => e.stopPropagation()}
+      onPointerUp={e => e.stopPropagation()}
     >
       {/* Header */}
       <div className="px-3 py-2 border-b border-cyan-dim bg-navy">
