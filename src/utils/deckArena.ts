@@ -7,7 +7,9 @@
 
 import { parseArenaFormat } from './deckImport';
 import { createEmptyDeck, addCardToSection, touchUpdatedAt } from './deckRecord';
-import type { DeckRecord, DeckFormat, DeckSource } from '../types/deck';
+import { getLatestCardPrinting } from '../services/deckCardSearch';
+import type { ScryfallCard } from '../types/card';
+import type { DeckCardEntry, DeckRecord, DeckFormat, DeckSource, PreferredPrinting } from '../types/deck';
 import type { ImportedDeckPayload } from '../types/game';
 
 // Arena text -> DeckRecord
@@ -147,5 +149,51 @@ export function deckRecordToImportPayload(deck: DeckRecord): ImportedDeckPayload
       count: entry.count,
       preferredPrinting: entry.preferredPrinting ?? null,
     })),
+  };
+}
+
+export async function deckRecordToSandboxImportPayload(
+  deck: DeckRecord,
+): Promise<ImportedDeckPayload> {
+  const [commander, mainboard, sideboard] = await Promise.all([
+    deck.commander[0] ? buildImportedEntry(deck.commander[0]) : Promise.resolve(null),
+    Promise.all(deck.mainboard.map(buildImportedEntry)),
+    Promise.all(deck.sideboard.map(buildImportedEntry)),
+  ]);
+
+  return {
+    commander,
+    mainboard,
+    sideboard,
+  };
+}
+
+async function buildImportedEntry(entry: DeckCardEntry) {
+  return {
+    name: entry.cardName,
+    count: entry.count,
+    preferredPrinting:
+      entry.preferredPrinting ?? (await getFallbackPrinting(entry.cardName)),
+  };
+}
+
+async function getFallbackPrinting(cardName: string): Promise<PreferredPrinting | null> {
+  try {
+    const card = await getLatestCardPrinting(cardName);
+    return card ? toPreferredPrinting(card) : null;
+  } catch {
+    return null;
+  }
+}
+
+function toPreferredPrinting(card: ScryfallCard): PreferredPrinting {
+  return {
+    scryfallId: card.id,
+    set: card.set,
+    setName: card.set_name,
+    collectorNumber: card.collector_number,
+    imageUri: card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null,
+    backImageUri: card.card_faces?.[1]?.image_uris?.normal ?? null,
+    backName: card.card_faces?.[1]?.name ?? null,
   };
 }

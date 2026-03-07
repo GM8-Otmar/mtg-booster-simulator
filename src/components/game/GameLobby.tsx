@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useGameTable } from '../../contexts/GameTableContext';
 import type { DeckRecord } from '../../types/deck';
-import { deckRecordToImportPayload } from '../../utils/deckArena';
+import { deckRecordToSandboxImportPayload } from '../../utils/deckArena';
 import { createSandboxGame, createSandboxGameFromDeck } from '../../utils/sandboxGame';
 
 interface GameLobbyProps {
@@ -59,10 +59,11 @@ export default function GameLobby({ onEnterTable, pendingDeck }: GameLobbyProps)
     onEnterTable(true);
   };
 
-  const handleSandboxFromDeck = () => {
+  const handleSandboxFromDeck = async () => {
     if (!pendingDeck) return;
+    const sandboxDeck = await deckRecordToSandboxImportPayload(pendingDeck);
     const { room, playerId } = createSandboxGameFromDeck(
-      deckRecordToImportPayload(pendingDeck),
+      sandboxDeck,
       { playerName: sandboxName.trim() || 'You' },
     );
     loadSandbox(room, playerId, sandboxName.trim() || 'You');
