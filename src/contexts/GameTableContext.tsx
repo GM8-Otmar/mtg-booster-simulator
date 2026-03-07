@@ -14,6 +14,7 @@ import type {
   GameZone,
   TokenTemplate,
   GameAction,
+  ImportedDeckPayload,
 } from '../types/game';
 import type { ParsedDeck } from '../utils/deckImport';
 import { applyDelta, appendLog } from '../utils/gameDelta';
@@ -50,7 +51,7 @@ export interface GameTableContextType {
   // lobby actions
   createGame: (playerName: string, format?: string) => Promise<string>; // returns code
   joinGame: (code: string, playerName: string) => Promise<void>;
-  importDeck: (deck: ParsedDeck) => Promise<void>;
+  importDeck: (deck: ParsedDeck | ImportedDeckPayload) => Promise<void>;
   importCommander: (commanderName: string) => Promise<void>;
   leaveGame: () => void;
   /** Load a pre-built fake room for offline sandbox testing (no server needed) */
@@ -334,7 +335,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     }
   }, [post]);
 
-  const importDeck = useCallback(async (deck: ParsedDeck): Promise<void> => {
+  const importDeck = useCallback(async (deck: ParsedDeck | ImportedDeckPayload): Promise<void> => {
     if (!gameRoomId || !playerId) throw new Error('Not in a game');
     setLoading(true);
     setError(null);

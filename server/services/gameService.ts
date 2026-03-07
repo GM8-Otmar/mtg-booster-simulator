@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 import type {
   GameRoom, GameFormat, GamePlayerState, BattlefieldCard,
-  ParsedDeck, GameAction,
+  ParsedDeck, GameAction, ImportedDeckPayload, ImportedDeckCard,
 } from '../types/game';
 import * as storage from './gameStorageService';
 
@@ -98,12 +98,45 @@ interface ResolvedCard {
   backName?: string | null;
 }
 
+function isImportedDeckPayload(deck: ParsedDeck | ImportedDeckPayload): deck is ImportedDeckPayload {
+  return typeof deck.commander === 'object' || Array.isArray(deck.mainboard) && !!deck.mainboard[0] && 'preferredPrinting' in deck.mainboard[0];
+}
+
+function normalizeImportedDeck(deck: ParsedDeck | ImportedDeckPayload): {
+  commander: ImportedDeckCard | null;
+  mainboard: ImportedDeckCard[];
+  sideboard: ImportedDeckCard[];
+} {
+  if (isImportedDeckPayload(deck)) {
+    return deck;
+  }
+
+  return {
+    commander: deck.commander ? { name: deck.commander, count: 1 } : null,
+    mainboard: deck.mainboard.map(entry => ({ name: entry.name, count: entry.count })),
+    sideboard: deck.sideboard.map(entry => ({ name: entry.name, count: entry.count })),
+  };
+}
+
 /** Resolve card names via Scryfall /cards/collection (up to 75 per call). */
 async function resolveNames(
-  entries: { name: string; count: number }[],
+  entries: ImportedDeckCard[],
 ): Promise<Map<string, ResolvedCard>> {
   const result = new Map<string, ResolvedCard>();
-  const unique = [...new Set(entries.map(e => e.name))];
+  const unresolvedEntries = entries.filter(entry => !entry.preferredPrinting?.scryfallId);
+
+  for (const entry of entries) {
+    if (entry.preferredPrinting?.scryfallId) {
+      result.set(entry.name.toLowerCase(), {
+        scryfallId: entry.preferredPrinting.scryfallId,
+        imageUri: entry.preferredPrinting.imageUri,
+        backImageUri: entry.preferredPrinting.backImageUri ?? null,
+        backName: entry.preferredPrinting.backName ?? null,
+      });
+    }
+  }
+
+  const unique = [...new Set(unresolvedEntries.map(e => e.name))];
 
   for (let i = 0; i < unique.length; i += 75) {
     const chunk = unique.slice(i, i + 75).map(name => ({ name }));
@@ -135,7 +168,7 @@ async function resolveNames(
 export async function importDeck(
   roomId: string,
   playerId: string,
-  deck: ParsedDeck,
+  deck: ParsedDeck | ImportedDeckPayload,
   /** Pass pre-resolved cards (from sealed pool) to skip Scryfall lookup */
   resolvedCards?: Map<string, ResolvedCard>,
 ): Promise<GameRoom> {
@@ -147,10 +180,11 @@ export async function importDeck(
   // Commander is optional — the user may import the 99 first, then add commander separately
 
   // resolve names via Scryfall unless provided
+  const normalizedDeck = normalizeImportedDeck(deck);
   const allEntries = [
-    ...(deck.commander ? [{ name: deck.commander, count: 1 }] : []),
-    ...deck.mainboard,
-    ...deck.sideboard,
+    ...(normalizedDeck.commander ? [normalizedDeck.commander] : []),
+    ...normalizedDeck.mainboard,
+    ...normalizedDeck.sideboard,
   ];
   const resolved = resolvedCards ?? await resolveNames(allEntries);
 
@@ -196,13 +230,13 @@ export async function importDeck(
   }
 
   // Commander → command_zone
-  if (deck.commander) {
-    const id = makeInstance(deck.commander, 'command_zone', true);
+  if (normalizedDeck.commander) {
+    const id = makeInstance(normalizedDeck.commander.name, 'command_zone', true);
     player.commandZoneCardIds.push(id);
   }
 
   // Mainboard → library
-  for (const entry of deck.mainboard) {
+  for (const entry of normalizedDeck.mainboard) {
     for (let i = 0; i < entry.count; i++) {
       const id = makeInstance(entry.name, 'library');
       player.libraryCardIds.push(id);
@@ -210,7 +244,7 @@ export async function importDeck(
   }
 
   // Sideboard → sideboard zone
-  for (const entry of deck.sideboard) {
+  for (const entry of normalizedDeck.sideboard) {
     for (let i = 0; i < entry.count; i++) {
       const id = makeInstance(entry.name, 'sideboard');
       player.sideboardCardIds.push(id);

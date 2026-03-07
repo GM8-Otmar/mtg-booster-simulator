@@ -15,6 +15,7 @@ import {
   clearPreferredPrinting,
   removeCardFromSection,
   renameDeck as renameDeckRecord,
+  setDeckIcon,
   setFormat as setDeckFormat,
   setNotes as setDeckNotes,
   setCommander,
@@ -54,6 +55,7 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [autoSaveError, setAutoSaveError] = useState<string | null>(null);
   const [printingPicker, setPrintingPicker] = useState<{ section: DeckSection; cardName: string } | null>(null);
   const [printingResults, setPrintingResults] = useState<ScryfallCard[]>([]);
   const [printingLoading, setPrintingLoading] = useState(false);
@@ -69,6 +71,8 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
         if (!mounted) return;
         setDeck(nextDeck);
         setIsDirty(false);
+        setSaveMessage(null);
+        setAutoSaveError(null);
       })
       .catch(nextError => {
         if (!mounted) return;
@@ -163,6 +167,7 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
 
     setIsSaving(true);
     setBuilderError(null);
+    setAutoSaveError(null);
 
     try {
       await saveDeck(deck);
@@ -174,6 +179,28 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
       setIsSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!deck || !isDirty || isSaving) {
+      return;
+    }
+
+    const timeout = window.setTimeout(async () => {
+      setIsSaving(true);
+      setAutoSaveError(null);
+      try {
+        await saveDeck(deck);
+        setIsDirty(false);
+        setSaveMessage('Autosaved');
+      } catch (nextError) {
+        setAutoSaveError(nextError instanceof Error ? nextError.message : 'Autosave failed');
+      } finally {
+        setIsSaving(false);
+      }
+    }, 1200);
+
+    return () => window.clearTimeout(timeout);
+  }, [deck, isDirty, isSaving, saveDeck]);
 
   const loadPrintings = async (cardName: string) => {
     setPrintingLoading(true);
@@ -227,6 +254,10 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
 
   const handleNotesChange = (notes: string) => {
     updateDeck(current => setDeckNotes(current, notes));
+  };
+
+  const handleIconChange = (icon: string | null) => {
+    updateDeck(current => setDeckIcon(current, icon));
   };
 
   if (initialLoading) {
@@ -302,9 +333,9 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
         </div>
       </div>
 
-      {(builderError || error) && (
+      {(builderError || error || autoSaveError) && (
         <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm">
-          {builderError ?? error}
+          {builderError ?? error ?? autoSaveError}
         </div>
       )}
 
@@ -366,9 +397,13 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
             name={deck.name}
             format={deck.format}
             notes={deck.notes}
+            icon={deck.preferences.icon}
+            commanderName={deck.commander[0]?.cardName ?? null}
+            commanderImageUri={deck.commander[0]?.preferredPrinting?.imageUri ?? null}
             onNameChange={handleNameChange}
             onFormatChange={handleFormatChange}
             onNotesChange={handleNotesChange}
+            onIconChange={handleIconChange}
           />
           <DeckStatsPanel deck={deck} />
           <DeckValidationPanel deck={deck} />

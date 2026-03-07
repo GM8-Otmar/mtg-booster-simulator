@@ -4,18 +4,28 @@ interface DeckMetadataPanelProps {
   name: string;
   format: DeckFormat;
   notes: string;
+  icon: string | null | undefined;
+  commanderName: string | null;
+  commanderImageUri?: string | null;
   onNameChange: (value: string) => void;
   onFormatChange: (value: DeckFormat) => void;
   onNotesChange: (value: string) => void;
+  onIconChange: (value: string | null) => void;
 }
+
+const ICON_CHOICES = ['D', 'C', 'A', 'F', 'S', 'W'];
 
 export default function DeckMetadataPanel({
   name,
   format,
   notes,
+  icon,
+  commanderName,
+  commanderImageUri,
   onNameChange,
   onFormatChange,
   onNotesChange,
+  onIconChange,
 }: DeckMetadataPanelProps) {
   return (
     <div className="bg-navy-light rounded-xl p-4 border border-cyan-dim space-y-4">
@@ -24,6 +34,48 @@ export default function DeckMetadataPanel({
         <p className="text-xs text-cream-muted mt-1">
           Manage the deck identity here instead of treating the builder like a temporary import box.
         </p>
+      </div>
+
+      <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-4 items-start">
+        <div className="space-y-2">
+          <div className="w-[88px] h-[120px] rounded-xl overflow-hidden border border-cyan-dim bg-navy flex items-center justify-center">
+            {commanderImageUri ? (
+              <img src={commanderImageUri} alt={commanderName ?? name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-3xl font-black text-cream/75">{icon ?? name[0] ?? 'D'}</span>
+            )}
+          </div>
+          <p className="text-[11px] text-cream-muted text-center">
+            {commanderName ? `Cover: ${commanderName}` : 'No commander cover yet'}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-xs uppercase tracking-wide text-cream-muted">Deck Icon</label>
+          <div className="flex flex-wrap gap-2">
+            {ICON_CHOICES.map(choice => (
+              <button
+                key={choice}
+                type="button"
+                onClick={() => onIconChange(choice)}
+                className={`w-9 h-9 rounded-lg border text-sm font-bold transition-colors ${
+                  icon === choice
+                    ? 'bg-cyan text-navy border-cyan'
+                    : 'bg-navy border-cyan-dim text-cream hover:border-cyan/60'
+                }`}
+              >
+                {choice}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => onIconChange(null)}
+              className="px-3 h-9 rounded-lg border border-cyan-dim bg-navy text-xs font-semibold text-cream-muted hover:text-cream"
+            >
+              Auto
+            </button>
+          </div>
+        </div>
       </div>
 
       <div>

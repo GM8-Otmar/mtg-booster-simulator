@@ -244,6 +244,16 @@ export function setTags(deck: DeckRecord, tags: string[]): DeckRecord {
   return touchUpdatedAt({ ...deck, tags: [...tags] });
 }
 
+export function setDeckIcon(deck: DeckRecord, icon: string | null): DeckRecord {
+  return touchUpdatedAt({
+    ...deck,
+    preferences: {
+      ...deck.preferences,
+      icon,
+    },
+  });
+}
+
 export function touchUpdatedAt(deck: DeckRecord): DeckRecord {
   return { ...deck, updatedAt: new Date().toISOString() };
 }

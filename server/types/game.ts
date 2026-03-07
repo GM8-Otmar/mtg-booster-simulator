@@ -109,6 +109,23 @@ export interface ParsedDeck {
   sideboard: { name: string; count: number }[];
 }
 
+export interface ImportedDeckCard {
+  name: string;
+  count: number;
+  preferredPrinting?: {
+    scryfallId: string;
+    imageUri: string | null;
+    backImageUri?: string | null;
+    backName?: string | null;
+  } | null;
+}
+
+export interface ImportedDeckPayload {
+  commander: ImportedDeckCard | null;
+  mainboard: ImportedDeckCard[];
+  sideboard: ImportedDeckCard[];
+}
+
 export interface ImportedCard {
   name: string;
   scryfallId: string;

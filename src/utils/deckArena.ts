@@ -8,6 +8,7 @@
 import { parseArenaFormat } from './deckImport';
 import { createEmptyDeck, addCardToSection, touchUpdatedAt } from './deckRecord';
 import type { DeckRecord, DeckFormat, DeckSource } from '../types/deck';
+import type { ImportedDeckPayload } from '../types/game';
 
 // Arena text -> DeckRecord
 
@@ -124,5 +125,27 @@ export function deckRecordToParsedDeck(deck: DeckRecord): {
     commander: deck.commander[0]?.cardName ?? null,
     mainboard: deck.mainboard.map(e => ({ name: e.cardName, count: e.count })),
     sideboard: deck.sideboard.map(e => ({ name: e.cardName, count: e.count })),
+  };
+}
+
+export function deckRecordToImportPayload(deck: DeckRecord): ImportedDeckPayload {
+  return {
+    commander: deck.commander[0]
+      ? {
+          name: deck.commander[0].cardName,
+          count: 1,
+          preferredPrinting: deck.commander[0].preferredPrinting ?? null,
+        }
+      : null,
+    mainboard: deck.mainboard.map(entry => ({
+      name: entry.cardName,
+      count: entry.count,
+      preferredPrinting: entry.preferredPrinting ?? null,
+    })),
+    sideboard: deck.sideboard.map(entry => ({
+      name: entry.cardName,
+      count: entry.count,
+      preferredPrinting: entry.preferredPrinting ?? null,
+    })),
   };
 }

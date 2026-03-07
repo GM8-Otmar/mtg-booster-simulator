@@ -16,7 +16,7 @@ import TargetingOverlay from '../components/game/TargetingOverlay';
 import OpponentInfoPanel from '../components/game/OpponentInfoPanel';
 import type { DeckRecord } from '../types/deck';
 import type { BattlefieldCard } from '../types/game';
-import { deckRecordToParsedDeck } from '../utils/deckArena';
+import { deckRecordToImportPayload } from '../utils/deckArena';
 import { CardInspectorProvider } from '../components/game/CardInspectorPanel';
 
 interface GameTablePageProps {
@@ -115,7 +115,7 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed }: Ga
 
     let cancelled = false;
 
-    importDeck(deckRecordToParsedDeck(pendingDeck))
+    importDeck(deckRecordToImportPayload(pendingDeck))
       .then(() => {
         if (cancelled) return;
         setPendingDeckImported(true);
