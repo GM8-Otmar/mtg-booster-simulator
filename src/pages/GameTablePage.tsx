@@ -134,6 +134,7 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed }: Ga
   if (!room || !atTable) {
     return (
       <GameLobby
+        pendingDeck={pendingDeck}
         onEnterTable={(sandbox) => {
           setAtTable(true);
           setShowImportAfterJoin(!sandbox && !pendingDeck);

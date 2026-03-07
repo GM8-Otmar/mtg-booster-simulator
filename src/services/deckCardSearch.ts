@@ -41,3 +41,8 @@ export async function searchCardPrintings(cardName: string): Promise<ScryfallCar
 
   return response.data.data ?? [];
 }
+
+export async function getLatestCardPrinting(cardName: string): Promise<ScryfallCard | null> {
+  const results = await searchCardPrintings(cardName);
+  return results[0] ?? null;
+}

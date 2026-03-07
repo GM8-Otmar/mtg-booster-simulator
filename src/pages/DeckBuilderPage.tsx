@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { CardInspectorPanel, useCardInspector } from '../components/game/CardInspectorPanel';
 import DeckMetadataPanel from '../components/decks/DeckMetadataPanel';
 import DeckSearchPanel from '../components/decks/DeckSearchPanel';
 import DeckSectionView from '../components/decks/DeckSectionView';
@@ -6,13 +7,14 @@ import DeckStatsPanel from '../components/decks/DeckStatsPanel';
 import DeckValidationPanel from '../components/decks/DeckValidationPanel';
 import PrintingPickerModal from '../components/decks/PrintingPickerModal';
 import { useDeckLibrary } from '../contexts/DeckLibraryContext';
-import { searchCardPrintings, searchDeckCards } from '../services/deckCardSearch';
+import { getLatestCardPrinting, searchCardPrintings, searchDeckCards } from '../services/deckCardSearch';
 import type { ScryfallCard } from '../types/card';
 import type { DeckRecord, DeckSection, PreferredPrinting } from '../types/deck';
 import {
   addCardToSection,
   changeCardCount,
   clearPreferredPrinting,
+  promoteCardToCommander,
   removeCardFromSection,
   renameDeck as renameDeckRecord,
   setDeckIcon,
@@ -30,23 +32,20 @@ interface DeckBuilderPageProps {
 }
 
 function toPreferredPrinting(card: ScryfallCard): PreferredPrinting {
-  const imageUri = card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null;
-  const backImageUri = card.card_faces?.[1]?.image_uris?.normal ?? null;
-  const backName = card.card_faces?.[1]?.name ?? null;
-
   return {
     scryfallId: card.id,
     set: card.set,
     setName: card.set_name,
     collectorNumber: card.collector_number,
-    imageUri,
-    backImageUri,
-    backName,
+    imageUri: card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null,
+    backImageUri: card.card_faces?.[1]?.image_uris?.normal ?? null,
+    backName: card.card_faces?.[1]?.name ?? null,
   };
 }
 
-export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
+function BuilderContent({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
   const { error, exportDeck, loadDeck, saveDeck } = useDeckLibrary();
+  const { inspect } = useCardInspector();
   const [deck, setDeck] = useState<DeckRecord | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -60,6 +59,7 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
   const [printingResults, setPrintingResults] = useState<ScryfallCard[]>([]);
   const [printingLoading, setPrintingLoading] = useState(false);
   const [printingError, setPrintingError] = useState<string | null>(null);
+  const [fallbackPrintings, setFallbackPrintings] = useState<Record<string, PreferredPrinting | null>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -89,11 +89,47 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
     };
   }, [deckId, loadDeck]);
 
+  useEffect(() => {
+    if (!deck) return;
+
+    const missingNames = [
+      ...deck.commander,
+      ...deck.mainboard,
+      ...deck.sideboard,
+      ...deck.maybeboard,
+    ]
+      .filter(entry => !entry.preferredPrinting)
+      .map(entry => entry.cardName)
+      .filter((name, index, arr) => arr.findIndex(candidate => candidate.toLowerCase() === name.toLowerCase()) === index)
+      .filter(name => fallbackPrintings[name.toLowerCase()] === undefined);
+
+    if (missingNames.length === 0) return;
+
+    let cancelled = false;
+
+    void Promise.all(
+      missingNames.map(async name => {
+        const latest = await getLatestCardPrinting(name).catch(() => null);
+        return [name.toLowerCase(), latest ? toPreferredPrinting(latest) : null] as const;
+      }),
+    ).then(results => {
+      if (cancelled) return;
+      setFallbackPrintings(current => {
+        const next = { ...current };
+        for (const [name, printing] of results) {
+          next[name] = printing;
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deck, fallbackPrintings]);
+
   const commanderName = deck?.commander[0]?.cardName ?? null;
-  const title = useMemo(() => {
-    if (!deck) return 'Deck Builder';
-    return `${deck.name} Builder`;
-  }, [deck]);
+  const title = useMemo(() => (deck ? `${deck.name} Builder` : 'Deck Builder'), [deck]);
 
   const updateDeck = (updater: (current: DeckRecord) => DeckRecord) => {
     setDeck(current => {
@@ -112,6 +148,13 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
       next = setPreferredPrinting(next, section, card.name, printing);
       return next;
     });
+    inspect({
+      name: card.name,
+      imageUri: printing.imageUri,
+      instanceId: `deck-add-${card.id}`,
+      backImageUri: printing.backImageUri ?? null,
+      backName: printing.backName ?? null,
+    });
   };
 
   const handleSetCommander = (card: ScryfallCard) => {
@@ -121,6 +164,10 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
       next = setPreferredPrinting(next, 'commander', card.name, printing);
       return next;
     });
+  };
+
+  const handlePromoteCommander = (section: DeckSection, cardName: string) => {
+    updateDeck(current => promoteCardToCommander(current, section, cardName));
   };
 
   const handleIncrement = (section: DeckSection, cardName: string) => {
@@ -142,18 +189,14 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
   };
 
   const handleRemove = (section: DeckSection, cardName: string) => {
-    updateDeck(current =>
-      removeCardFromSection(current, section, cardName, Number.MAX_SAFE_INTEGER)
-    );
+    updateDeck(current => removeCardFromSection(current, section, cardName, Number.MAX_SAFE_INTEGER));
   };
 
   const handleSearch = async (query: string) => {
     setSearchLoading(true);
     setBuilderError(null);
-
     try {
-      const results = await searchDeckCards(query);
-      setSearchResults(results);
+      setSearchResults(await searchDeckCards(query));
     } catch (nextError) {
       setBuilderError(nextError instanceof Error ? nextError.message : 'Card search failed');
       setSearchResults([]);
@@ -162,52 +205,49 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
     }
   };
 
-  const handleSave = async () => {
-    if (!deck) return;
-
+  const persistDeck = async (nextDeck: DeckRecord, mode: 'save' | 'autosave') => {
     setIsSaving(true);
-    setBuilderError(null);
     setAutoSaveError(null);
+    if (mode === 'save') {
+      setBuilderError(null);
+    }
 
     try {
-      await saveDeck(deck);
+      await saveDeck(nextDeck);
       setIsDirty(false);
-      setSaveMessage('Saved');
+      setSaveMessage(mode === 'save' ? 'Saved' : 'Autosaved');
     } catch (nextError) {
-      setBuilderError(nextError instanceof Error ? nextError.message : 'Failed to save deck');
+      const message = nextError instanceof Error ? nextError.message : `${mode} failed`;
+      if (mode === 'save') {
+        setBuilderError(message);
+      } else {
+        setAutoSaveError(message);
+      }
     } finally {
       setIsSaving(false);
     }
   };
 
-  useEffect(() => {
-    if (!deck || !isDirty || isSaving) {
-      return;
-    }
+  const handleSave = async () => {
+    if (!deck) return;
+    await persistDeck(deck, 'save');
+  };
 
-    const timeout = window.setTimeout(async () => {
-      setIsSaving(true);
-      setAutoSaveError(null);
-      try {
-        await saveDeck(deck);
-        setIsDirty(false);
-        setSaveMessage('Autosaved');
-      } catch (nextError) {
-        setAutoSaveError(nextError instanceof Error ? nextError.message : 'Autosave failed');
-      } finally {
-        setIsSaving(false);
-      }
+  useEffect(() => {
+    if (!deck || !isDirty || isSaving) return;
+
+    const timeout = window.setTimeout(() => {
+      void persistDeck(deck, 'autosave');
     }, 1200);
 
     return () => window.clearTimeout(timeout);
-  }, [deck, isDirty, isSaving, saveDeck]);
+  }, [deck, isDirty, isSaving]);
 
   const loadPrintings = async (cardName: string) => {
     setPrintingLoading(true);
     setPrintingError(null);
     try {
-      const results = await searchCardPrintings(cardName);
-      setPrintingResults(results);
+      setPrintingResults(await searchCardPrintings(cardName));
     } catch (nextError) {
       setPrintingError(nextError instanceof Error ? nextError.message : 'Failed to load printings');
       setPrintingResults([]);
@@ -243,22 +283,6 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
   const activePrintingEntry = printingPicker && deck
     ? deck[printingPicker.section].find(entry => entry.cardName.toLowerCase() === printingPicker.cardName.toLowerCase()) ?? null
     : null;
-
-  const handleNameChange = (name: string) => {
-    updateDeck(current => renameDeckRecord(current, name || 'Untitled Deck'));
-  };
-
-  const handleFormatChange = (format: DeckRecord['format']) => {
-    updateDeck(current => setDeckFormat(current, format));
-  };
-
-  const handleNotesChange = (notes: string) => {
-    updateDeck(current => setDeckNotes(current, notes));
-  };
-
-  const handleIconChange = (icon: string | null) => {
-    updateDeck(current => setDeckIcon(current, icon));
-  };
 
   if (initialLoading) {
     return (
@@ -296,7 +320,7 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
           </button>
           <h1 className="text-3xl font-bold text-cream">{title}</h1>
           <p className="text-cream-muted text-sm">
-            {deck.format} {commanderName ? `- Commander: ${commanderName}` : ''}
+            {deck.format} {commanderName ? `- Commander: ${commanderName}` : '- No commander selected'}
           </p>
         </div>
 
@@ -308,9 +332,7 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
           >
             {isSaving ? 'Saving...' : isDirty ? 'Unsaved changes' : 'Saved'}
           </span>
-          {saveMessage && (
-            <span className="text-xs text-cyan">{saveMessage}</span>
-          )}
+          {saveMessage && <span className="text-xs text-cyan">{saveMessage}</span>}
           <button
             onClick={() => onPlayDeck(deck)}
             className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 rounded-lg text-sm font-semibold text-green-300"
@@ -339,7 +361,7 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
         </div>
       )}
 
-      <div className="grid xl:grid-cols-[360px_minmax(0,1fr)_320px] gap-6 items-start">
+      <div className="grid xl:grid-cols-[360px_minmax(0,1fr)_360px] gap-6 items-start">
         <DeckSearchPanel
           loading={searchLoading}
           results={searchResults}
@@ -347,6 +369,7 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
           onAddToMainboard={card => handleAddToSection('mainboard', card)}
           onAddToSideboard={card => handleAddToSection('sideboard', card)}
           onSetCommander={handleSetCommander}
+          canSetCommander={deck.commander.length === 0}
         />
 
         <div className="space-y-4">
@@ -354,6 +377,7 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
             title="Commander"
             section="commander"
             entries={deck.commander}
+            fallbackPrintings={fallbackPrintings}
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
             onRemove={handleRemove}
@@ -364,16 +388,20 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
             title="Mainboard"
             section="mainboard"
             entries={deck.mainboard}
+            fallbackPrintings={fallbackPrintings}
+            canAddCommanderFromContext={deck.commander.length === 0}
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
             onRemove={handleRemove}
             onChoosePrinting={handleOpenPrintingPicker}
             onClearPrinting={handleClearPrinting}
+            onSetAsCommander={handlePromoteCommander}
           />
           <DeckSectionView
             title="Sideboard"
             section="sideboard"
             entries={deck.sideboard}
+            fallbackPrintings={fallbackPrintings}
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
             onRemove={handleRemove}
@@ -384,6 +412,7 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
             title="Maybeboard"
             section="maybeboard"
             entries={deck.maybeboard}
+            fallbackPrintings={fallbackPrintings}
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
             onRemove={handleRemove}
@@ -399,12 +428,21 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
             notes={deck.notes}
             icon={deck.preferences.icon}
             commanderName={deck.commander[0]?.cardName ?? null}
-            commanderImageUri={deck.commander[0]?.preferredPrinting?.imageUri ?? null}
-            onNameChange={handleNameChange}
-            onFormatChange={handleFormatChange}
-            onNotesChange={handleNotesChange}
-            onIconChange={handleIconChange}
+            commanderImageUri={
+              deck.commander[0]?.preferredPrinting?.imageUri ??
+              (deck.commander[0] ? fallbackPrintings[deck.commander[0].cardName.toLowerCase()]?.imageUri ?? null : null)
+            }
+            onNameChange={value => updateDeck(current => renameDeckRecord(current, value || 'Untitled Deck'))}
+            onFormatChange={value => updateDeck(current => setDeckFormat(current, value))}
+            onNotesChange={value => updateDeck(current => setDeckNotes(current, value))}
+            onIconChange={value => updateDeck(current => setDeckIcon(current, value))}
           />
+          <div className="bg-navy-light rounded-xl border border-cyan-dim overflow-hidden">
+            <div className="px-4 py-3 border-b border-cyan-dim">
+              <h3 className="text-lg font-semibold text-cream">Inspector</h3>
+            </div>
+            <CardInspectorPanel />
+          </div>
           <DeckStatsPanel deck={deck} />
           <DeckValidationPanel deck={deck} />
         </div>
@@ -429,4 +467,8 @@ export default function DeckBuilderPage({ deckId, onBack, onPlayDeck }: DeckBuil
       )}
     </div>
   );
+}
+
+export default function DeckBuilderPage(props: DeckBuilderPageProps) {
+  return <BuilderContent {...props} />;
 }

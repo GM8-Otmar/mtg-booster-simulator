@@ -176,6 +176,25 @@ export function setCommander(deck: DeckRecord, cardName: string): DeckRecord {
   });
 }
 
+export function promoteCardToCommander(
+  deck: DeckRecord,
+  section: DeckSection,
+  cardName: string,
+): DeckRecord {
+  const sourceEntry = deck[section].find(entry => entry.cardName.toLowerCase() === cardName.toLowerCase());
+  let next = setCommander(deck, cardName);
+
+  if (sourceEntry?.preferredPrinting) {
+    next = setPreferredPrinting(next, 'commander', cardName, sourceEntry.preferredPrinting);
+  }
+
+  if (section !== 'commander') {
+    next = removeCardFromSection(next, section, cardName, 1);
+  }
+
+  return next;
+}
+
 export function addCommander(deck: DeckRecord, cardName: string): DeckRecord {
   const existing = findEntry(deck.commander, cardName);
   if (existing >= 0) return deck;
