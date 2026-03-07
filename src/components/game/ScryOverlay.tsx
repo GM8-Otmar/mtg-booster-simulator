@@ -1,12 +1,18 @@
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BattlefieldCard } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
+import { useCardInspector } from './CardInspectorPanel';
 
 type Dest = 'top' | 'bottom' | 'graveyard';
 
-interface DragState {
+interface PointerDragState {
   id: string;
   from: Dest;
+  startX: number;
+  startY: number;
+  x: number;
+  y: number;
+  moved: boolean;
 }
 
 interface ScryOverlayProps {
@@ -17,12 +23,13 @@ interface ScryOverlayProps {
 
 export default function ScryOverlay({ cards, instanceIds, initialMode = 'scry' }: ScryOverlayProps) {
   const { resolveScry } = useGameTable();
+  const { hoverInspect, clearHoverInspect } = useCardInspector();
   const [mode, setMode] = useState<'scry' | 'surveil'>(initialMode);
   const [topIds, setTopIds] = useState<string[]>([...instanceIds]);
   const [bottomIds, setBottomIds] = useState<string[]>([]);
   const [graveyardIds, setGraveyardIds] = useState<string[]>([]);
-
-  const dragRef = useRef<DragState | null>(null);
+  const [drag, setDrag] = useState<PointerDragState | null>(null);
+  const suppressClickRef = useRef(false);
 
   const cardMap = Object.fromEntries(cards.map(c => [c.instanceId, c]));
 
@@ -37,6 +44,29 @@ export default function ScryOverlay({ cards, instanceIds, initialMode = 'scry' }
     if (from === dest) return;
     setterFor(from)(prev => prev.filter(x => x !== id));
     setterFor(dest)(prev => [...prev, id]);
+  };
+
+  const reorderWithin = (id: string, dest: Dest, targetId: string) => {
+    setterFor(dest)(prev => {
+      const arr = [...prev];
+      const fi = arr.indexOf(id);
+      const ti = arr.indexOf(targetId);
+      if (fi === -1 || ti === -1) return prev;
+      arr.splice(fi, 1);
+      arr.splice(ti, 0, id);
+      return arr;
+    });
+  };
+
+  const moveBeforeTarget = (id: string, from: Dest, to: Dest, targetId: string) => {
+    setterFor(from)(prev => prev.filter(x => x !== id));
+    setterFor(to)(prev => {
+      const arr = [...prev];
+      const ti = arr.indexOf(targetId);
+      if (ti === -1) arr.push(id);
+      else arr.splice(ti, 0, id);
+      return arr;
+    });
   };
 
   // Click cycles: top → bottom → (surveil: graveyard →) top
@@ -60,57 +90,52 @@ export default function ScryOverlay({ cards, instanceIds, initialMode = 'scry' }
     setMode(m);
   };
 
-  // ── Drag handlers ──────────────────────────────────────────────────────────
-
-  const onDragStart = (e: React.DragEvent, id: string, from: Dest) => {
-    dragRef.current = { id, from };
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const onDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  // Drop onto a specific card (reorder within section or move between sections)
-  const onDropCard = (e: React.DragEvent, targetId: string, targetDest: Dest) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const drag = dragRef.current;
-    if (!drag || drag.id === targetId) return;
-
-    if (drag.from === targetDest) {
-      // Reorder within same section
-      setterFor(targetDest)(prev => {
-        const arr = [...prev];
-        const fi = arr.indexOf(drag.id);
-        const ti = arr.indexOf(targetId);
-        if (fi === -1 || ti === -1) return prev;
-        arr.splice(fi, 1);
-        arr.splice(ti, 0, drag.id);
-        return arr;
-      });
-    } else {
-      // Move to different section, insert before target
-      setterFor(drag.from)(prev => prev.filter(x => x !== drag.id));
-      setterFor(targetDest)(prev => {
-        const arr = [...prev];
-        const ti = arr.indexOf(targetId);
-        arr.splice(ti, 0, drag.id);
-        return arr;
-      });
-    }
-    dragRef.current = null;
-  };
-
-  // Drop onto an empty section area
-  const onDropSection = (e: React.DragEvent, dest: Dest) => {
-    e.preventDefault();
-    const drag = dragRef.current;
+  useEffect(() => {
     if (!drag) return;
-    moveToSection(drag.id, dest);
-    dragRef.current = null;
-  };
+
+    const onMove = (e: PointerEvent) => {
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      const moved = Math.sqrt(dx * dx + dy * dy) >= 4;
+      setDrag(prev => prev ? { ...prev, x: e.clientX, y: e.clientY, moved: prev.moved || moved } : prev);
+    };
+
+    const onUp = (e: PointerEvent) => {
+      const current = drag;
+      const moved = current.moved || Math.sqrt((e.clientX - current.startX) ** 2 + (e.clientY - current.startY) ** 2) >= 4;
+      if (moved) {
+        const hits = document.elementsFromPoint(e.clientX, e.clientY);
+        const cardEl = hits.find(el => (el as HTMLElement).dataset?.scryCardId) as HTMLElement | undefined;
+        const sectionEl = hits.find(el => (el as HTMLElement).dataset?.scrySection) as HTMLElement | undefined;
+        const targetId = cardEl?.dataset.scryCardId;
+        const targetDest = cardEl?.dataset.scryDest as Dest | undefined;
+        const sectionDest = sectionEl?.dataset.scrySection as Dest | undefined;
+
+        if (targetId && targetDest && targetId !== current.id) {
+          if (current.from === targetDest) {
+            reorderWithin(current.id, targetDest, targetId);
+          } else {
+            moveBeforeTarget(current.id, current.from, targetDest, targetId);
+          }
+        } else if (sectionDest) {
+          moveToSection(current.id, sectionDest);
+        }
+
+        suppressClickRef.current = true;
+        window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+      }
+      setDrag(null);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [drag, topIds, bottomIds, graveyardIds]);
 
   const handleResolve = () => {
     resolveScry(topIds, bottomIds, graveyardIds.length > 0 ? graveyardIds : undefined);
@@ -138,10 +163,23 @@ export default function ScryOverlay({ cards, instanceIds, initialMode = 'scry' }
     return (
       <div
         key={id}
-        draggable
-        onDragStart={e => onDragStart(e, id, dest)}
-        onDragOver={onDragOver}
-        onDrop={e => onDropCard(e, id, dest)}
+        data-scry-card-id={id}
+        data-scry-dest={dest}
+        onPointerDown={e => {
+          if (e.button !== 0) return;
+          e.stopPropagation();
+          setDrag({
+            id,
+            from: dest,
+            startX: e.clientX,
+            startY: e.clientY,
+            x: e.clientX,
+            y: e.clientY,
+            moved: false,
+          });
+        }}
+        onMouseEnter={() => hoverInspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId })}
+        onMouseLeave={clearHoverInspect}
         className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-navy-light hover:bg-navy/80 cursor-grab active:cursor-grabbing transition-colors group select-none"
       >
         {/* Position index */}
@@ -150,7 +188,10 @@ export default function ScryOverlay({ cards, instanceIds, initialMode = 'scry' }
         {/* Card thumbnail — click to cycle destination */}
         <div
           className={`w-10 h-14 rounded overflow-hidden border-2 shrink-0 cursor-pointer hover:scale-105 transition-transform ${borderColor}`}
-          onClick={() => cycleCard(id)}
+          onClick={() => {
+            if (suppressClickRef.current) return;
+            cycleCard(id);
+          }}
           title="Click to change destination"
         >
           {card.imageUri ? (
@@ -180,15 +221,14 @@ export default function ScryOverlay({ cards, instanceIds, initialMode = 'scry' }
 
   const renderSection = (dest: Dest, ids: string[], label: string, borderCls: string, headerCls: string) => (
     <div
+      data-scry-section={dest}
       className={`rounded-xl border ${borderCls} p-2 min-h-[56px]`}
-      onDragOver={onDragOver}
-      onDrop={e => onDropSection(e, dest)}
     >
       <p className={`text-[10px] uppercase tracking-widest mb-1.5 px-1 ${headerCls}`}>
         {label} <span className="opacity-50">({ids.length})</span>
       </p>
       <div className="flex flex-col gap-0.5">
-        {ids.map((id, i) => renderCard(id, dest, i))}
+        {ids.map((entryId, i) => renderCard(entryId, dest, i))}
         {ids.length === 0 && (
           <p className="text-cream-muted/20 text-xs text-center py-1.5 select-none">
             drag cards here
@@ -210,7 +250,7 @@ export default function ScryOverlay({ cards, instanceIds, initialMode = 'scry' }
             </h2>
             <p className="text-cream-muted/70 text-xs mt-0.5">
               {mode === 'scry'
-                ? 'Click a card to cycle Top ↔ Bottom. Drag to reorder.'
+                ? 'Click to cycle Top ↔ Bottom. Drag to reorder.'
                 : 'Click to cycle Top → Bottom → Graveyard. Drag to reorder.'}
             </p>
           </div>
@@ -279,6 +319,25 @@ export default function ScryOverlay({ cards, instanceIds, initialMode = 'scry' }
             Confirm
           </button>
         </div>
+
+        {drag && (() => {
+          const card = cardMap[drag.id];
+          if (!card) return null;
+          return (
+            <div
+              className="fixed z-[12000] pointer-events-none w-10 h-14 rounded border-2 border-cyan shadow-2xl overflow-hidden opacity-90"
+              style={{ left: drag.x - 20, top: drag.y - 28 }}
+            >
+              {card.imageUri ? (
+                <img src={card.imageUri} alt={card.name} className="w-full h-full object-cover" draggable={false} />
+              ) : (
+                <div className="w-full h-full bg-navy-light flex items-center justify-center p-1">
+                  <span className="text-[7px] text-cream text-center leading-tight">{card.name}</span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
       </div>
     </div>

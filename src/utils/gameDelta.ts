@@ -47,6 +47,7 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
 
     case 'zones_changed': {
       const changes = Array.isArray(delta.changes) ? delta.changes : [];
+      const removed = Array.isArray(delta.removed) ? delta.removed : [];
       let nextRoom = room;
       for (const change of changes) {
         const existing = nextRoom.cards[change.instanceId];
@@ -70,7 +71,33 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
           players,
         };
       }
+      for (const rem of removed) {
+        const existing = nextRoom.cards[rem.instanceId];
+        if (!existing) continue;
+        const cards = { ...nextRoom.cards };
+        delete cards[rem.instanceId];
+        const players = removeFromPlayerZone(nextRoom.players, rem.controllerId, rem.instanceId, rem.fromZone);
+        nextRoom = {
+          ...nextRoom,
+          cards,
+          players,
+        };
+      }
       return { ...nextRoom, actionLog: appendLog(nextRoom.actionLog, delta.log) };
+    }
+
+    case 'token_removed': {
+      const existing = room.cards[delta.instanceId];
+      if (!existing) return { ...room, actionLog: appendLog(room.actionLog, delta.log) };
+      const cards = { ...room.cards };
+      delete cards[delta.instanceId];
+      const players = removeFromPlayerZone(room.players, delta.controllerId, delta.instanceId, delta.fromZone);
+      return {
+        ...room,
+        cards,
+        players,
+        actionLog: appendLog(room.actionLog, delta.log),
+      };
     }
 
     case 'card_tapped': {
@@ -187,7 +214,8 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       };
     }
 
-    case 'commander_cast': {
+    case 'commander_cast':
+    case 'commander_tax_set': {
       const player = room.players[delta.playerId];
       if (!player) return room;
       return {
@@ -273,10 +301,9 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       if (!player) return room;
       const newCards = { ...room.cards };
       const newHandIds: string[] = [];
-      const newLibIds: string[] = [];
+      const newLibIds: string[] = [...player.libraryCardIds, ...player.handCardIds];
       for (const id of player.handCardIds) {
         if (newCards[id]) newCards[id] = { ...newCards[id]!, zone: 'library' };
-        newLibIds.push(id);
       }
       for (const card of delta.drawn as BattlefieldCard[]) {
         newCards[card.instanceId] = { ...card, zone: 'hand' };
@@ -298,11 +325,13 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
     case 'mulligan_other': {
       const player = room.players[delta.playerId];
       if (!player) return room;
+      const reshuffledPool = [...player.libraryCardIds, ...player.handCardIds];
+      const newLibraryIds = reshuffledPool.filter(id => !(delta.instanceIds as string[]).includes(id));
       return {
         ...room,
         players: {
           ...room.players,
-          [delta.playerId]: { ...player, handCardIds: delta.instanceIds },
+          [delta.playerId]: { ...player, handCardIds: delta.instanceIds, libraryCardIds: newLibraryIds },
         },
         actionLog: appendLog(room.actionLog, delta.log),
       };
@@ -402,4 +431,33 @@ export function reZonePlayer(
   }
 
   return { ...players, [controllerId]: updated };
+}
+
+function removeFromPlayerZone(
+  players: Record<string, GamePlayerState>,
+  controllerId: string,
+  instanceId: string,
+  fromZone: GameZone,
+): Record<string, GamePlayerState> {
+  const player = players[controllerId];
+  if (!player) return players;
+  const zoneMap: Partial<Record<GameZone, keyof GamePlayerState>> = {
+    hand: 'handCardIds',
+    library: 'libraryCardIds',
+    graveyard: 'graveyardCardIds',
+    exile: 'exileCardIds',
+    command_zone: 'commandZoneCardIds',
+    sideboard: 'sideboardCardIds',
+  };
+  const fromKey = zoneMap[fromZone];
+  if (!fromKey) return players;
+  const arr = player[fromKey] as string[];
+  if (!arr.includes(instanceId)) return players;
+  return {
+    ...players,
+    [controllerId]: {
+      ...player,
+      [fromKey]: arr.filter(id => id !== instanceId),
+    },
+  };
 }

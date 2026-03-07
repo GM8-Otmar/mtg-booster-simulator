@@ -207,6 +207,11 @@ PORT=3001
 - Sandbox and multiplayer now share the same bulk interaction model for multi-select tap, zone moves, and counters.
 - Multiplayer bulk actions are processed atomically (`cards:tap`, `cards:zone`, `cards:counter`) to reduce race conditions from per-card emits.
 - Game code lookup skips malformed JSON files in `data/games` instead of failing the whole scan.
+- TODO: Investigate remaining bulk-action instability under heavier load/playtesting (intermittent misses in larger selections).
+- TODO: Explore deck import UX with tabs (`Import Full Deck` vs `Add Commander`) so commander can be added independently of the 99.
+- TODO: Tokens/cloned cards should be ephemeral (if they leave battlefield, remove them instead of persisting as normal card objects).
+- TODO: Command zone commander-tax controls should use the same `X / + / -` style interaction pattern as Scry/Surveil, with tax increments in steps of 2.
+- TODO: Card finder should support sending cards to `Top`, `Hand`, and `Battlefield` (new option) from the finder overlay.
 
 ## 📝 Data Persistence
 

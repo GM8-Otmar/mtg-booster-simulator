@@ -26,8 +26,8 @@ interface MenuItem {
 export default function CardContextMenu({ card, x, y, onClose, selectedCards }: CardContextMenuProps) {
   const {
     changeZone, bulkChangeZone, tapCard, bulkTapCards, setFaceDown, transformCard,
-    addCounter, bulkAddCounter, resetCounters, notifyCommanderCast,
-    createToken, revealCards, startTargeting, effectivePlayerId: playerId,
+    addCounter, bulkAddCounter, resetCounters, notifyCommanderCast, setCommanderTax,
+    createToken, revealCards, startTargeting, effectivePlayerId: playerId, myPlayer,
   } = useGameTable();
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -96,7 +96,12 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
       label: 'Move all to…',
       items: zones.map(z => ({
         label: z.label,
-        action: () => { bulkChangeZone(targets.map(c => c.instanceId), z.zone, z.toIndex); onClose(); },
+        action: () => {
+          const ids = targets.map(c => c.instanceId);
+          console.log(`[MTG-BULK] Move all to ${z.zone}`, { count: ids.length, ids: ids.map(id => id.slice(0, 8)) });
+          bulkChangeZone(ids, z.zone, z.toIndex);
+          onClose();
+        },
       })),
     });
 
@@ -107,11 +112,19 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
         items: [
           {
             label: 'Counter +1 all',
-            action: () => { bulkAddCounter(bfIds, 'generic', 1); onClose(); },
+            action: () => {
+              console.log(`[MTG-BULK] Counter +1 all`, { count: bfIds.length, ids: bfIds.map(id => id.slice(0, 8)) });
+              bulkAddCounter(bfIds, 'generic', 1);
+              onClose();
+            },
           },
           {
             label: 'Counter -1 all',
-            action: () => { bulkAddCounter(bfIds, 'generic', -1); onClose(); },
+            action: () => {
+              console.log(`[MTG-BULK] Counter -1 all`, { count: bfIds.length, ids: bfIds.map(id => id.slice(0, 8)) });
+              bulkAddCounter(bfIds, 'generic', -1);
+              onClose();
+            },
           },
         ],
       });
@@ -274,7 +287,29 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
         items: [
           {
             label: 'Cast Commander (pay tax)',
-            action: () => do_(() => notifyCommanderCast(card.instanceId)),
+            action: () => do_(() => {
+              notifyCommanderCast(card.instanceId);
+              changeZone(card.instanceId, 'battlefield');
+            }),
+          },
+          {
+            label: 'Increase Tax (+2)',
+            action: () => do_(() => setCommanderTax((myPlayer?.commanderTax ?? 0) + 1)),
+          },
+          {
+            label: 'Decrease Tax (-2)',
+            action: () => do_(() => setCommanderTax(Math.max(0, (myPlayer?.commanderTax ?? 0) - 1))),
+          },
+          {
+            label: 'Set Commander Tax…',
+            action: () => do_(() => {
+              const currentTax = myPlayer?.commanderTax ?? 0;
+              const raw = window.prompt('Set commander tax cast count (0 = no tax):', String(currentTax));
+              if (raw == null) return;
+              const next = Number.parseInt(raw, 10);
+              if (Number.isNaN(next)) return;
+              setCommanderTax(Math.max(0, next));
+            }),
           },
         ],
       });
@@ -302,6 +337,8 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
       ref={menuRef}
       className="fixed z-[9999] bg-navy-light border border-cyan-dim rounded-xl shadow-2xl text-sm overflow-hidden"
       style={{ ...adjustedStyle, width: 220 }}
+      onPointerDown={e => e.stopPropagation()}
+      onPointerUp={e => e.stopPropagation()}
     >
       {/* Header */}
       <div className="px-3 py-2 border-b border-cyan-dim bg-navy">

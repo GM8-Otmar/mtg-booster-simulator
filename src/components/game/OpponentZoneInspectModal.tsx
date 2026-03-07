@@ -10,7 +10,7 @@ interface OpponentZoneInspectModalProps {
 
 export default function OpponentZoneInspectModal({ player, zone, onClose }: OpponentZoneInspectModalProps) {
   const { room } = useGameTable();
-  const { inspect } = useCardInspector();
+  const { inspect, hoverInspect, clearHoverInspect } = useCardInspector();
   const ids = zone === 'graveyard' ? player.graveyardCardIds : player.exileCardIds;
   const cards = ids.map(id => room?.cards[id]).filter(Boolean) as BattlefieldCard[];
   const label = zone === 'graveyard' ? 'Graveyard' : 'Exile';
@@ -41,6 +41,8 @@ export default function OpponentZoneInspectModal({ player, zone, onClose }: Oppo
                 key={card.instanceId}
                 className="flex items-center gap-2 p-1.5 rounded hover:bg-navy-light cursor-pointer transition-colors"
                 onClick={() => inspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId })}
+                onMouseEnter={() => hoverInspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId })}
+                onMouseLeave={clearHoverInspect}
               >
                 {card.imageUri && (
                   <img

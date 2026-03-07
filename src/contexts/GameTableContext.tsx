@@ -51,6 +51,7 @@ export interface GameTableContextType {
   createGame: (playerName: string, format?: string) => Promise<string>; // returns code
   joinGame: (code: string, playerName: string) => Promise<void>;
   importDeck: (deck: ParsedDeck) => Promise<void>;
+  importCommander: (commanderName: string) => Promise<void>;
   leaveGame: () => void;
   /** Load a pre-built fake room for offline sandbox testing (no server needed) */
   loadSandbox: (room: GameRoom, sandboxPlayerId: string, sandboxPlayerName: string) => void;
@@ -61,7 +62,7 @@ export interface GameTableContextType {
 
   // game actions
   moveCard: (instanceId: string, x: number, y: number, persist: boolean) => void;
-  changeZone: (instanceId: string, toZone: GameZone, toIndex?: number) => void;
+  changeZone: (instanceId: string, toZone: GameZone, toIndex?: number, x?: number, y?: number) => void;
   reorderHand: (newHandCardIds: string[]) => void;
   /** Move multiple cards to a zone at once (avoids batching issues) */
   bulkChangeZone: (instanceIds: string[], toZone: GameZone, toIndex?: number) => void;
@@ -85,6 +86,7 @@ export interface GameTableContextType {
   adjustPoison: (delta: number) => void;
   dealCommanderDamage: (victimId: string, commanderInstanceId: string, amount: number) => void;
   notifyCommanderCast: (instanceId: string) => void;
+  setCommanderTax: (value: number) => void;
 
   // library actions
   drawCards: (count: number) => void;
@@ -181,6 +183,10 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     });
     sock.on('game:error', (msg: string) => {
       console.error('[MTG] game:error', msg);
+      if (isSandboxRef.current && msg === 'Room or player not found') {
+        // Sandbox uses local state only; ignore socket room errors.
+        return;
+      }
       if (msg === 'Room or player not found') {
         // Server restarted and lost game state — reset so user can start fresh
         setRoom(null);
@@ -260,7 +266,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const sock = socketRef.current;
-    if (!sock || !gameRoomId || !playerId) return;
+    if (!sock || !gameRoomId || !playerId || isSandbox) return;
 
     const doJoin = () => {
       console.log(`[MTG] emitting game:join (room=${gameRoomId.slice(0, 8)}, player=${playerId.slice(0, 8)}, socketId=${sock.id})`);
@@ -275,7 +281,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       sock.off('connect', doJoin);
       sock.emit('game:leave', { gameRoomId });
     };
-  }, [gameRoomId, playerId]);
+  }, [gameRoomId, playerId, isSandbox]);
 
   // ── REST helpers ──────────────────────────────────────────────────────────
 
@@ -337,6 +343,21 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       socketRef.current?.emit('game:join', { gameRoomId, playerId });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to import deck');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [gameRoomId, playerId, post]);
+
+  const importCommander = useCallback(async (commanderName: string): Promise<void> => {
+    if (!gameRoomId || !playerId) throw new Error('Not in a game');
+    setLoading(true);
+    setError(null);
+    try {
+      await post(`/${gameRoomId}/import-commander`, { playerId, commanderName });
+      socketRef.current?.emit('game:join', { gameRoomId, playerId });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to import commander');
       throw e;
     } finally {
       setLoading(false);
@@ -521,9 +542,11 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('card:move', { instanceId, x, y, persist });
   }, [emit]);
 
-  const changeZone = useCallback((instanceId: string, toZone: GameZone, toIndex?: number) => {
+  const changeZone = useCallback((instanceId: string, toZone: GameZone, toIndex?: number, x?: number, y?: number) => {
+    const currentRoom = roomRef.current;
+    if (!currentRoom?.cards[instanceId]) return;
     saveUndoSnapshot();
-    emit('card:zone', { instanceId, toZone, toIndex });
+    emit('card:zone', { instanceId, toZone, toIndex, x, y });
   }, [emit, saveUndoSnapshot]);
 
   const reorderHand = useCallback((newHandCardIds: string[]) => {
@@ -549,6 +572,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   }, [emit, saveUndoSnapshot]);
 
   const bulkChangeZone = useCallback((instanceIds: string[], toZone: GameZone, toIndex?: number) => {
+    console.log(`[MTG-BULK] bulkChangeZone called`, { count: instanceIds.length, toZone, toIndex, sandbox: isSandboxRef.current, ids: instanceIds.map(id => id.slice(0, 8)) });
     if (instanceIds.length === 0) return;
     saveUndoSnapshot();
     if (isSandboxRef.current) {
@@ -575,6 +599,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   }, [emit, saveUndoSnapshot]);
 
   const bulkTapCards = useCallback((instanceIds: string[], tapped: boolean) => {
+    console.log(`[MTG-BULK] bulkTapCards called`, { count: instanceIds.length, tapped, sandbox: isSandboxRef.current, ids: instanceIds.map(id => id.slice(0, 8)) });
     if (instanceIds.length === 0) return;
     saveUndoSnapshot();
     if (isSandboxRef.current) {
@@ -625,6 +650,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   }, [emit, saveUndoSnapshot]);
 
   const bulkAddCounter = useCallback((instanceIds: string[], counterType: string, delta: number, label?: string) => {
+    console.log(`[MTG-BULK] bulkAddCounter called`, { count: instanceIds.length, counterType, delta, label, sandbox: isSandboxRef.current, ids: instanceIds.map(id => id.slice(0, 8)) });
     if (instanceIds.length === 0) return;
     saveUndoSnapshot();
     if (isSandboxRef.current) {
@@ -710,6 +736,10 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
 
   const notifyCommanderCast = useCallback((instanceId: string) => {
     emit('commander:cast', { instanceId });
+  }, [emit]);
+
+  const setCommanderTax = useCallback((value: number) => {
+    emit('commander:tax:set', { value });
   }, [emit]);
 
   // ── Library ───────────────────────────────────────────────────────────────
@@ -846,36 +876,67 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     const source = targetingSource;
     if (!source) return;
     setTargetingSource(null);
-    const arrowId = makeLogId();
-    const createdAt = Date.now();
-    setTargetingArrows(prev => [...prev, { id: arrowId, fromId: source, toId: targetId, createdAt }]);
-    // Auto-remove arrow after 5 seconds
-    setTimeout(() => {
-      setTargetingArrows(prev => prev.filter(a => a.id !== arrowId));
-    }, 5000);
-    // Append client-side log entry
-    const currentRoom = roomRef.current;
-    const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
-    if (currentRoom && activePid) {
-      const me = currentRoom.players[activePid];
-      const myName = me?.playerName ?? 'Player';
-      const fromCard = currentRoom.cards[source];
-      // targetId may be a card instanceId or a playerId
-      const toCard = currentRoom.cards[targetId];
-      const toPlayer = currentRoom.players[targetId];
-      const fromName = fromCard?.name ?? source;
-      const toName = toCard?.name ?? toPlayer?.playerName ?? targetId;
-      const entry: GameAction = {
-        id: makeLogId(),
-        timestamp: new Date().toISOString(),
-        playerId: activePid,
-        playerName: myName,
-        type: 'targeting',
-        description: `${myName}: ${fromName} targets ${toName}`,
-      };
-      setRoom(prev => prev ? { ...prev, actionLog: appendLog(prev.actionLog, entry) } : prev);
+    if (isSandboxRef.current) {
+      const arrowId = makeLogId();
+      const createdAt = Date.now();
+      setTargetingArrows(prev => [...prev, { id: arrowId, fromId: source, toId: targetId, createdAt }]);
+      // Auto-remove arrow after 5 seconds
+      setTimeout(() => {
+        setTargetingArrows(prev => prev.filter(a => a.id !== arrowId));
+      }, 5000);
+      // Append client-side log entry in sandbox mode
+      const currentRoom = roomRef.current;
+      const activePid = activeSandboxPlayerIdRef.current ?? playerIdRef.current;
+      if (currentRoom && activePid) {
+        const me = currentRoom.players[activePid];
+        const myName = me?.playerName ?? 'Player';
+        const fromCard = currentRoom.cards[source];
+        const toCard = currentRoom.cards[targetId];
+        const toPlayer = currentRoom.players[targetId];
+        const fromName = fromCard?.name ?? source;
+        const toName = toCard?.name ?? toPlayer?.playerName ?? targetId;
+        const entry: GameAction = {
+          id: makeLogId(),
+          timestamp: new Date().toISOString(),
+          playerId: activePid,
+          playerName: myName,
+          type: 'targeting',
+          description: `${myName}: ${fromName} targets ${toName}`,
+        };
+        setRoom(prev => prev ? { ...prev, actionLog: appendLog(prev.actionLog, entry) } : prev);
+      }
+      return;
     }
-  }, [targetingSource]);
+    emit('card:target', { sourceInstanceId: source, targetId });
+  }, [targetingSource, emit]);
+
+  useEffect(() => {
+    const sock = socketRef.current;
+    if (!sock) return;
+    const onTargeting = ({
+      sourceInstanceId,
+      targetId,
+      log,
+    }: {
+      sourceInstanceId: string;
+      targetId: string;
+      log?: GameAction;
+    }) => {
+      const arrowId = makeLogId();
+      const createdAt = Date.now();
+      setTargetingArrows(prev => [...prev, { id: arrowId, fromId: sourceInstanceId, toId: targetId, createdAt }]);
+      setTimeout(() => {
+        setTargetingArrows(prev => prev.filter(a => a.id !== arrowId));
+      }, 5000);
+      if (log) {
+        setRoom(prev => prev ? { ...prev, actionLog: appendLog(prev.actionLog, log) } : prev);
+      }
+    };
+    sock.on('game:targeting', onTargeting);
+    return () => {
+      sock.off('game:targeting', onTargeting);
+    };
+  }, []);
 
   const dismissArrow = useCallback((arrowId: string) => {
     setTargetingArrows(prev => prev.filter(a => a.id !== arrowId));
@@ -931,10 +992,10 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       canUndo, undo,
       myPlayer, myHandCards, myBattlefieldCards, myLibraryCount,
       myGraveyardCards, myExileCards, myCommandZoneCards,
-      createGame, joinGame, importDeck, leaveGame, loadSandbox, isSandbox,
+      createGame, joinGame, importDeck, importCommander, leaveGame, loadSandbox, isSandbox,
       activeSandboxPlayerId, setActiveSandboxPlayer,
       moveCard, changeZone, reorderHand, bulkChangeZone, tapCard, bulkTapCards, tapAll, untapAll, setFaceDown, transformCard, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
-      adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast,
+      adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast, setCommanderTax,
       drawCards, shuffleLibrary, scry, resolveScry, mulligan,
       createToken,
       passTurn, activePlayerId, isMyTurn,
@@ -1009,8 +1070,32 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
 
     case 'card:zone': {
       const card = room.cards[payload.instanceId];
+      if (!card) return room;
       const fromZone = card?.zone ?? 'battlefield';
       const cardName = card?.name ?? 'a card';
+      const isEphemeralToken = card.scryfallId === 'token';
+      if (isEphemeralToken && fromZone === 'battlefield' && payload.toZone !== 'battlefield') {
+        const newCards = { ...room.cards };
+        delete newCards[payload.instanceId];
+        const player = room.players[myPlayerId];
+        if (!player) return { ...room, cards: newCards };
+        const nextPlayer = {
+          ...player,
+          handCardIds: player.handCardIds.filter(id => id !== payload.instanceId),
+          libraryCardIds: player.libraryCardIds.filter(id => id !== payload.instanceId),
+          graveyardCardIds: player.graveyardCardIds.filter(id => id !== payload.instanceId),
+          exileCardIds: player.exileCardIds.filter(id => id !== payload.instanceId),
+          commandZoneCardIds: player.commandZoneCardIds.filter(id => id !== payload.instanceId),
+          sideboardCardIds: player.sideboardCardIds.filter(id => id !== payload.instanceId),
+        };
+        const tokenDesc = `${myName}: ${cardName} left battlefield and ceased to exist`;
+        return {
+          ...room,
+          cards: newCards,
+          players: { ...room.players, [myPlayerId]: nextPlayer },
+          actionLog: appendLog(room.actionLog, log('zone_change', tokenDesc)),
+        };
+      }
       let zoneDesc: string;
       if (fromZone === 'hand' && payload.toZone === 'battlefield') {
         zoneDesc = `${myName} played ${cardName}`;
@@ -1018,7 +1103,13 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
         const toLabel = ZONE_LABELS[payload.toZone as string] ?? payload.toZone;
         zoneDesc = `${myName}: ${cardName} → ${toLabel}`;
       }
-      return applyDelta(room, {
+      // If x,y provided (e.g. drag to battlefield), update position before zone change
+      let roomBeforeDelta = room;
+      if (payload.x != null && payload.y != null) {
+        const updatedCard = { ...roomBeforeDelta.cards[payload.instanceId]!, x: payload.x, y: payload.y };
+        roomBeforeDelta = { ...roomBeforeDelta, cards: { ...roomBeforeDelta.cards, [payload.instanceId]: updatedCard } };
+      }
+      return applyDelta(roomBeforeDelta, {
         type: 'zone_changed',
         instanceId: payload.instanceId,
         toZone: payload.toZone,
@@ -1100,6 +1191,18 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
         playerId: myPlayerId,
         commanderTax: player.commanderTax + 1,
         log: log('commander_cast', `${myName} cast ${commanderName}`),
+      }, myPlayerId);
+    }
+
+    case 'commander:tax:set': {
+      const player = room.players[myPlayerId];
+      if (!player) return room;
+      const nextTax = Math.max(0, Math.floor(Number(payload.value) || 0));
+      return applyDelta(room, {
+        type: 'commander_tax_set',
+        playerId: myPlayerId,
+        commanderTax: nextTax,
+        log: log('commander_cast', `${myName} set commander tax to +${nextTax * 2}`),
       }, myPlayerId);
     }
 

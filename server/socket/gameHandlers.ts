@@ -78,8 +78,8 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
   // ── Zone change ───────────────────────────────────────────────────────────
 
   socket.on('card:zone', async ({
-    gameRoomId, instanceId, toZone, toIndex, playerId,
-  }: { gameRoomId: string; instanceId: string; toZone: GameZone; toIndex?: number; playerId: string }) => {
+    gameRoomId, instanceId, toZone, toIndex, playerId, x, y,
+  }: { gameRoomId: string; instanceId: string; toZone: GameZone; toIndex?: number; playerId: string; x?: number; y?: number }) => {
     const room = await storage.loadGame(gameRoomId);
     if (!room) { console.log(`[MTG-SERVER] card:zone — room not found (${gameRoomId?.slice(0, 8)})`); return; }
     const card = room.cards[instanceId];
@@ -97,10 +97,31 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
       if (idx !== -1) arr.splice(idx, 1);
     }
 
+    const isEphemeralToken = card.scryfallId === 'token';
+    if (isEphemeralToken && fromZone === 'battlefield' && toZone !== 'battlefield') {
+      delete room.cards[instanceId];
+      gameService.appendLog(room, playerId, 'zone_change',
+        `${player.playerName}: ${card.name} left battlefield and ceased to exist`);
+      room.lastActivity = ts();
+      await storage.saveGame(room);
+      io.to(ROOM(gameRoomId)).emit('game:delta', {
+        type: 'token_removed',
+        instanceId,
+        controllerId: playerId,
+        fromZone,
+        log: room.actionLog.at(-1),
+      });
+      return;
+    }
+
     card.zone = toZone;
     if (toZone === 'battlefield') {
       card.tapped = false;
       card.faceDown = false;
+      if (x != null && y != null) {
+        card.x = x;
+        card.y = y;
+      }
     }
 
     const toZoneKey = zoneKey(toZone);
@@ -134,10 +155,12 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
   socket.on('cards:zone', async ({
     gameRoomId, instanceIds, toZone, toIndex, playerId,
   }: { gameRoomId: string; instanceIds: string[]; toZone: GameZone; toIndex?: number; playerId: string }) => {
+    console.log(`[MTG-SERVER] cards:zone received`, { count: instanceIds?.length, toZone, playerId: playerId?.slice(0, 8) });
     const room = await storage.loadGame(gameRoomId);
     if (!room || !Array.isArray(instanceIds) || instanceIds.length === 0) return;
 
     const changes: Array<{ instanceId: string; fromZone: GameZone; toZone: GameZone; toIndex?: number; card: typeof room.cards[string] }> = [];
+    const removed: Array<{ instanceId: string; controllerId: string; fromZone: GameZone }> = [];
 
     for (const instanceId of instanceIds) {
       const card = room.cards[instanceId];
@@ -153,6 +176,13 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
         const arr = (player as any)[fromZoneKey] as string[];
         const idx = arr.indexOf(instanceId);
         if (idx !== -1) arr.splice(idx, 1);
+      }
+
+      const isEphemeralToken = card.scryfallId === 'token';
+      if (isEphemeralToken && fromZone === 'battlefield' && toZone !== 'battlefield') {
+        delete room.cards[instanceId];
+        removed.push({ instanceId, controllerId: playerId, fromZone });
+        continue;
       }
 
       card.zone = toZone;
@@ -177,7 +207,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
       });
     }
 
-    if (changes.length === 0) return;
+    if (changes.length === 0 && removed.length === 0) return;
 
     const actor = room.players[playerId];
     if (actor) {
@@ -191,6 +221,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     io.to(ROOM(gameRoomId)).emit('game:delta', {
       type: 'zones_changed',
       changes,
+      removed,
       log: room.actionLog.at(-1),
     });
   });
@@ -484,6 +515,52 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     io.to(ROOM(gameRoomId)).emit('game:delta', {
       type: 'commander_cast', playerId,
       commanderTax: room.players[playerId]!.commanderTax,
+      log: room.actionLog.at(-1),
+    });
+  });
+
+  socket.on('commander:tax:set', async ({
+    gameRoomId, playerId, value,
+  }: { gameRoomId: string; playerId: string; value: number }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !room.players[playerId]) return;
+    const player = room.players[playerId]!;
+    const nextTax = Math.max(0, Math.floor(Number(value) || 0));
+    player.commanderTax = nextTax;
+    gameService.appendLog(room, playerId, 'commander_cast',
+      `${player.playerName} set commander tax to +${nextTax * 2}`);
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', {
+      type: 'commander_tax_set',
+      playerId,
+      commanderTax: nextTax,
+      log: room.actionLog.at(-1),
+    });
+  });
+
+  // ── Targeting arrows ───────────────────────────────────────────────────────
+
+  socket.on('card:target', async ({
+    gameRoomId, playerId, sourceInstanceId, targetId,
+  }: { gameRoomId: string; playerId: string; sourceInstanceId: string; targetId: string }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !room.players[playerId]) return;
+    const sourceCard = room.cards[sourceInstanceId];
+    if (!sourceCard || sourceCard.controller !== playerId) return;
+
+    const actor = room.players[playerId]!;
+    const targetCard = room.cards[targetId];
+    const targetPlayer = room.players[targetId];
+    const targetName = targetCard?.name ?? targetPlayer?.playerName ?? 'target';
+    const desc = `${actor.playerName}: ${sourceCard.name} targets ${targetName}`;
+    gameService.appendLog(room, playerId, 'targeting', desc);
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+
+    io.to(ROOM(gameRoomId)).emit('game:targeting', {
+      sourceInstanceId,
+      targetId,
       log: room.actionLog.at(-1),
     });
   });
