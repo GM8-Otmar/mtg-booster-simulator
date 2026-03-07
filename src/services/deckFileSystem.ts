@@ -2,23 +2,37 @@
  * File System Access API wrapper for deck storage.
  *
  * Handles folder selection, permission management, and file I/O.
- * Folder handles are persisted in IndexedDB so the user doesn't
+ * Folder handles are persisted in IndexedDB so the user does not
  * have to re-select the folder on every visit.
  *
- * When the File System Access API is unavailable (Firefox, older browsers),
- * this module gracefully reports 'fallback' capability.
+ * When the File System Access API is unavailable, this module
+ * gracefully reports fallback capability.
  */
 
-// ── Capability detection ─────────────────────────────────────────────────────
+type PermissionMode = 'read' | 'readwrite';
+type PermissionStatus = 'granted' | 'denied' | 'prompt';
 
-export function isFileSystemAccessSupported(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    'showDirectoryPicker' in window
-  );
+interface PermissionCapableDirectoryHandle extends FileSystemDirectoryHandle {
+  queryPermission?: (descriptor: { mode: PermissionMode }) => Promise<PermissionStatus>;
+  requestPermission?: (descriptor: { mode: PermissionMode }) => Promise<PermissionStatus>;
+  entries?: () => AsyncIterable<[string, FileSystemHandle]>;
 }
 
-// ── IndexedDB handle persistence ─────────────────────────────────────────────
+interface WindowWithDirectoryPicker extends Window {
+  showDirectoryPicker?: (options?: {
+    id?: string;
+    mode?: PermissionMode;
+    startIn?: 'documents';
+  }) => Promise<FileSystemDirectoryHandle>;
+}
+
+// Capability detection
+
+export function isFileSystemAccessSupported(): boolean {
+  return typeof window !== 'undefined' && 'showDirectoryPicker' in window;
+}
+
+// IndexedDB handle persistence
 
 const IDB_NAME = 'mtg-deck-storage';
 const IDB_STORE = 'handles';
@@ -72,51 +86,61 @@ export async function clearDirectoryHandle(): Promise<void> {
       tx.onerror = () => reject(tx.error);
     });
   } catch {
-    // Ignore cleanup errors
+    // Ignore cleanup errors.
   }
 }
 
-// ── Permission management ────────────────────────────────────────────────────
+// Permission management
 
 export async function verifyPermission(
   handle: FileSystemDirectoryHandle,
-  mode: 'read' | 'readwrite' = 'readwrite',
+  mode: PermissionMode = 'readwrite',
 ): Promise<boolean> {
-  const options = { mode } as FileSystemHandlePermissionDescriptor;
+  const permissionHandle = handle as PermissionCapableDirectoryHandle;
+  const options = { mode };
 
-  // Check current permission
-  if ((await handle.queryPermission(options)) === 'granted') {
-    return true;
+  if (permissionHandle.queryPermission) {
+    const current = await permissionHandle.queryPermission(options);
+    if (current === 'granted') {
+      return true;
+    }
   }
 
-  // Request permission
-  if ((await handle.requestPermission(options)) === 'granted') {
-    return true;
+  if (permissionHandle.requestPermission) {
+    const requested = await permissionHandle.requestPermission(options);
+    if (requested === 'granted') {
+      return true;
+    }
   }
 
   return false;
 }
 
-// ── Folder picker ────────────────────────────────────────────────────────────
+// Folder picker
 
 export async function pickDeckFolder(): Promise<FileSystemDirectoryHandle | null> {
   if (!isFileSystemAccessSupported()) return null;
 
   try {
-    const handle = await window.showDirectoryPicker({
+    const pickerWindow = window as WindowWithDirectoryPicker;
+    const handle = await pickerWindow.showDirectoryPicker?.({
       id: 'mtg-decks',
       mode: 'readwrite',
       startIn: 'documents',
     });
+
+    if (!handle) {
+      return null;
+    }
+
     await saveDirectoryHandle(handle);
     return handle;
   } catch {
-    // User cancelled or error
     return null;
   }
 }
 
-// ── File operations ──────────────────────────────────────────────────────────
+// File operations
 
 const DECK_FILE_SUFFIX = '.deck.json';
 
@@ -136,11 +160,18 @@ export async function listDeckFiles(
   dir: FileSystemDirectoryHandle,
 ): Promise<string[]> {
   const names: string[] = [];
-  for await (const [name, handle] of dir.entries()) {
+  const directory = dir as PermissionCapableDirectoryHandle;
+
+  if (!directory.entries) {
+    return names;
+  }
+
+  for await (const [name, handle] of directory.entries()) {
     if (handle.kind === 'file' && isDeckFile(name)) {
       names.push(name);
     }
   }
+
   return names.sort();
 }
 

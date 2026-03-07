@@ -255,7 +255,7 @@ function HandCard({
 }
 
 export default function HandZone({ cards }: HandZoneProps) {
-  const { changeZone, moveCard, reorderHand } = useGameTable();
+  const { changeZone, reorderHand } = useGameTable();
   const [menuInfo, setMenuInfo] = useState<{ card: BattlefieldCard; x: number; y: number } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [dragShadowIndex, setDragShadowIndex] = useState<number | null>(null);

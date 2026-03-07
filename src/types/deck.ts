@@ -48,6 +48,7 @@ export interface DeckCardEntry {
 
 export interface DeckPreferences {
   defaultFormat?: DeckFormat;
+  icon?: string | null;
 }
 
 export interface DeckRecord {
@@ -80,6 +81,8 @@ export interface DeckSummary {
   source: DeckSource;
   cardCount: number;
   commanderNames: string[];
+  coverImageUri?: string | null;
+  icon?: string | null;
   updatedAt: string;
   lastPlayedAt?: string | null;
 }

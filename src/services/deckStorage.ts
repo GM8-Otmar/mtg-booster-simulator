@@ -1,5 +1,5 @@
 /**
- * Deck storage facade — the single interface the rest of the app consumes.
+ * Deck storage facade: the single interface the rest of the app consumes.
  *
  * Supports two modes:
  *   - 'folder': backed by a user-selected directory via File System Access API
@@ -9,25 +9,23 @@
  */
 
 import type { DeckRecord, DeckSummary, DeckStorageCapability } from '../types/deck';
-import { computeDeckSummary } from '../utils/deckSummary';
 import { duplicateDeck } from '../utils/deckRecord';
-import { serializeDeck, deserializeDeck } from './deckSerialization';
+import { computeDeckSummary } from '../utils/deckSummary';
+import { deserializeDeck, serializeDeck } from './deckSerialization';
 import {
-  isFileSystemAccessSupported,
-  loadDirectoryHandle,
-  saveDirectoryHandle,
   clearDirectoryHandle,
-  verifyPermission,
-  pickDeckFolder,
-  listDeckFiles,
-  readDeckFile,
-  writeDeckFile,
-  deleteDeckFile,
   deckFileName,
-  deckIdFromFileName,
+  deleteDeckFile,
+  isFileSystemAccessSupported,
+  listDeckFiles,
+  loadDirectoryHandle,
+  pickDeckFolder,
+  readDeckFile,
+  verifyPermission,
+  writeDeckFile,
 } from './deckFileSystem';
 
-// ── Storage interface ────────────────────────────────────────────────────────
+// Storage interface
 
 export interface DeckStorage {
   getCapability(): DeckStorageCapability;
@@ -44,11 +42,12 @@ export interface DeckStorage {
   rescan(): Promise<DeckSummary[]>;
 }
 
-// ── Folder-backed implementation ─────────────────────────────────────────────
+// Folder-backed implementation
 
 class FolderDeckStorage implements DeckStorage {
   private dirHandle: FileSystemDirectoryHandle | null = null;
   private initialized = false;
+  private memoryDecks = new Map<string, DeckRecord>();
 
   getCapability(): DeckStorageCapability {
     return 'folder';
@@ -63,21 +62,28 @@ class FolderDeckStorage implements DeckStorage {
     this.initialized = true;
 
     const handle = await loadDirectoryHandle();
-    if (handle) {
-      const ok = await verifyPermission(handle).catch(() => false);
-      if (ok) {
-        this.dirHandle = handle;
-      }
+    if (!handle) return;
+
+    const ok = await verifyPermission(handle).catch(() => false);
+    if (ok) {
+      this.dirHandle = handle;
     }
   }
 
   async connectFolder(): Promise<boolean> {
     const handle = await pickDeckFolder();
-    if (handle) {
-      this.dirHandle = handle;
-      return true;
+    if (!handle) return false;
+
+    this.dirHandle = handle;
+
+    if (this.memoryDecks.size > 0) {
+      for (const deck of this.memoryDecks.values()) {
+        await writeDeckFile(this.dirHandle, deckFileName(deck.id), serializeDeck(deck));
+      }
+      this.memoryDecks.clear();
     }
-    return false;
+
+    return true;
   }
 
   async disconnectFolder(): Promise<void> {
@@ -87,7 +93,12 @@ class FolderDeckStorage implements DeckStorage {
 
   async listDecks(): Promise<DeckSummary[]> {
     await this.init();
-    if (!this.dirHandle) return [];
+
+    if (!this.dirHandle) {
+      return Array.from(this.memoryDecks.values())
+        .map(computeDeckSummary)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    }
 
     const files = await listDeckFiles(this.dirHandle);
     const summaries: DeckSummary[] = [];
@@ -95,10 +106,9 @@ class FolderDeckStorage implements DeckStorage {
     for (const fileName of files) {
       try {
         const text = await readDeckFile(this.dirHandle, fileName);
-        const deck = deserializeDeck(text);
-        summaries.push(computeDeckSummary(deck));
+        summaries.push(computeDeckSummary(deserializeDeck(text)));
       } catch {
-        // Skip corrupt files
+        // Skip corrupt files.
       }
     }
 
@@ -107,7 +117,12 @@ class FolderDeckStorage implements DeckStorage {
 
   async loadDeck(deckId: string): Promise<DeckRecord> {
     await this.init();
-    if (!this.dirHandle) throw new Error('No folder connected');
+
+    if (!this.dirHandle) {
+      const deck = this.memoryDecks.get(deckId);
+      if (!deck) throw new Error(`Deck not found: ${deckId}`);
+      return { ...deck };
+    }
 
     const text = await readDeckFile(this.dirHandle, deckFileName(deckId));
     return deserializeDeck(text);
@@ -115,15 +130,22 @@ class FolderDeckStorage implements DeckStorage {
 
   async saveDeck(deck: DeckRecord): Promise<void> {
     await this.init();
-    if (!this.dirHandle) throw new Error('No folder connected');
 
-    const json = serializeDeck(deck);
-    await writeDeckFile(this.dirHandle, deckFileName(deck.id), json);
+    if (!this.dirHandle) {
+      this.memoryDecks.set(deck.id, { ...deck });
+      return;
+    }
+
+    await writeDeckFile(this.dirHandle, deckFileName(deck.id), serializeDeck(deck));
   }
 
   async deleteDeck(deckId: string): Promise<void> {
     await this.init();
-    if (!this.dirHandle) throw new Error('No folder connected');
+
+    if (!this.dirHandle) {
+      this.memoryDecks.delete(deckId);
+      return;
+    }
 
     await deleteDeckFile(this.dirHandle, deckFileName(deckId));
   }
@@ -138,14 +160,12 @@ class FolderDeckStorage implements DeckStorage {
   async importDeckFromFile(file: File): Promise<DeckRecord> {
     const text = await file.text();
 
-    // Try JSON first
     if (file.name.endsWith('.json') || file.name.endsWith('.deck.json')) {
       const deck = deserializeDeck(text);
       await this.saveDeck(deck);
       return deck;
     }
 
-    // Treat as Arena text
     const { arenaTextToDeckRecord } = await import('../utils/deckArena');
     const baseName = file.name.replace(/\.[^.]+$/, '') || 'Imported Deck';
     const deck = arenaTextToDeckRecord(text, { name: baseName });
@@ -162,7 +182,7 @@ class FolderDeckStorage implements DeckStorage {
   }
 }
 
-// ── Fallback implementation (in-memory + download) ───────────────────────────
+// Fallback implementation (in-memory + download)
 
 class FallbackDeckStorage implements DeckStorage {
   private decks = new Map<string, DeckRecord>();
@@ -180,7 +200,7 @@ class FallbackDeckStorage implements DeckStorage {
   }
 
   async disconnectFolder(): Promise<void> {
-    // No-op in fallback
+    // No-op in fallback.
   }
 
   async listDecks(): Promise<DeckSummary[]> {
@@ -235,7 +255,7 @@ class FallbackDeckStorage implements DeckStorage {
   }
 }
 
-// ── Download helper ──────────────────────────────────────────────────────────
+// Download helper
 
 function downloadJson(deck: DeckRecord): void {
   const json = serializeDeck(deck);
@@ -250,7 +270,7 @@ function downloadJson(deck: DeckRecord): void {
   URL.revokeObjectURL(url);
 }
 
-// ── Factory ──────────────────────────────────────────────────────────────────
+// Factory
 
 let instance: DeckStorage | null = null;
 

@@ -7,7 +7,7 @@
  * changes don't break existing saved decks.
  */
 
-import type { DeckRecord } from '../types/deck';
+import type { DeckCardEntry, DeckRecord } from '../types/deck';
 
 export const CURRENT_DECK_VERSION = 1;
 
@@ -100,9 +100,18 @@ function asString(value: unknown, fallback: string | null): string | null {
 
 function asCardEntries(raw: unknown): DeckRecord['mainboard'] {
   if (!Array.isArray(raw)) return [];
+
+  type RawCardEntry = {
+    cardName: string;
+    count: number;
+    preferredPrinting?: DeckCardEntry['preferredPrinting'];
+    notes?: string;
+    role?: string;
+  };
+
   return raw
     .filter(
-      (e): e is { cardName: string; count: number } =>
+      (e): e is RawCardEntry =>
         typeof e === 'object' &&
         e !== null &&
         typeof (e as Record<string, unknown>).cardName === 'string' &&

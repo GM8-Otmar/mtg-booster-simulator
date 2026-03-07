@@ -280,6 +280,8 @@ export function getDeckSummary(deck: DeckRecord): DeckSummary {
     source: deck.source,
     cardCount: getDeckCardCount(deck),
     commanderNames: deck.commander.map(e => e.cardName),
+    coverImageUri: deck.commander[0]?.preferredPrinting?.imageUri ?? null,
+    icon: deck.preferences.icon ?? null,
     updatedAt: deck.updatedAt,
     lastPlayedAt: deck.lastPlayedAt,
   };

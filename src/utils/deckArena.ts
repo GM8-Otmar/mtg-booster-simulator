@@ -1,15 +1,15 @@
 /**
- * Arena text ↔ DeckRecord conversion.
+ * Arena text <-> DeckRecord conversion.
  *
- * Reuses parseArenaFormat() from deckImport.ts — no duplication of parsing logic.
+ * Reuses parseArenaFormat() from deckImport.ts without duplicating parsing logic.
  * This module bridges the legacy import path into the new deck domain model.
  */
 
 import { parseArenaFormat } from './deckImport';
 import { createEmptyDeck, addCardToSection, touchUpdatedAt } from './deckRecord';
-import type { DeckRecord, DeckCardEntry, DeckFormat, DeckSource } from '../types/deck';
+import type { DeckRecord, DeckFormat, DeckSource } from '../types/deck';
 
-// ── Arena text → DeckRecord ──────────────────────────────────────────────────
+// Arena text -> DeckRecord
 
 export function arenaTextToDeckRecord(
   text: string,
@@ -27,18 +27,15 @@ export function arenaTextToDeckRecord(
     source: opts?.source ?? 'arena-import',
   });
 
-  // Commander
   if (parsed.commander) {
     deck.commander = [{ cardName: parsed.commander, count: 1 }];
   }
 
-  // Mainboard
   deck.mainboard = parsed.mainboard.map(e => ({
     cardName: e.name,
     count: e.count,
   }));
 
-  // Sideboard
   deck.sideboard = parsed.sideboard.map(e => ({
     cardName: e.name,
     count: e.count,
@@ -47,12 +44,11 @@ export function arenaTextToDeckRecord(
   return deck;
 }
 
-// ── DeckRecord → Arena text ──────────────────────────────────────────────────
+// DeckRecord -> Arena text
 
 export function deckRecordToArenaText(deck: DeckRecord): string {
   const lines: string[] = [];
 
-  // Commander section
   if (deck.commander.length > 0) {
     lines.push('Commander');
     for (const entry of deck.commander) {
@@ -61,7 +57,6 @@ export function deckRecordToArenaText(deck: DeckRecord): string {
     lines.push('');
   }
 
-  // Deck section
   if (deck.mainboard.length > 0) {
     lines.push('Deck');
     for (const entry of deck.mainboard) {
@@ -69,7 +64,6 @@ export function deckRecordToArenaText(deck: DeckRecord): string {
     }
   }
 
-  // Sideboard section
   if (deck.sideboard.length > 0) {
     if (lines.length > 0) lines.push('');
     lines.push('Sideboard');
@@ -81,7 +75,7 @@ export function deckRecordToArenaText(deck: DeckRecord): string {
   return lines.join('\n');
 }
 
-// ── Merge Arena text into existing deck ──────────────────────────────────────
+// Merge Arena text into existing deck
 
 export function mergeArenaTextIntoDeck(
   existing: DeckRecord,
@@ -90,7 +84,6 @@ export function mergeArenaTextIntoDeck(
   const parsed = parseArenaFormat(text);
   let result = { ...existing };
 
-  // Merge commander — only add if existing has none
   if (parsed.commander && existing.commander.length === 0) {
     result = {
       ...result,
@@ -98,10 +91,7 @@ export function mergeArenaTextIntoDeck(
     };
   }
 
-  // Merge mainboard — add counts for existing cards, add new cards
   result = mergeEntries(result, 'mainboard', parsed.mainboard);
-
-  // Merge sideboard
   result = mergeEntries(result, 'sideboard', parsed.sideboard);
 
   return touchUpdatedAt(result);
@@ -119,7 +109,7 @@ function mergeEntries(
   return result;
 }
 
-// ── DeckRecord → ParsedDeck (for legacy game import) ─────────────────────────
+// DeckRecord -> ParsedDeck (for legacy game import)
 
 /**
  * Convert a DeckRecord into the legacy ParsedDeck shape used by the game import API.

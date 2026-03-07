@@ -10,6 +10,7 @@ function sectionCount(entries: { count: number }[]): number {
 
 /** Compute a lightweight summary for the deck list. */
 export function computeDeckSummary(deck: DeckRecord): DeckSummary {
+  const commanderCover = deck.commander[0]?.preferredPrinting?.imageUri ?? null;
   return {
     id: deck.id,
     name: deck.name,
@@ -20,6 +21,8 @@ export function computeDeckSummary(deck: DeckRecord): DeckSummary {
       sectionCount(deck.mainboard) +
       sectionCount(deck.sideboard),
     commanderNames: deck.commander.map(e => e.cardName),
+    coverImageUri: commanderCover,
+    icon: deck.preferences.icon ?? null,
     updatedAt: deck.updatedAt,
     lastPlayedAt: deck.lastPlayedAt,
   };
