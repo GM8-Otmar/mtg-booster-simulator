@@ -32,9 +32,9 @@ export default function DeckLibraryPage({ onBack, onPlayDeck }: DeckLibraryPageP
           <div className="min-h-screen bg-navy text-cream p-8">
             <button
               onClick={onBack}
-              className="fixed top-4 left-4 px-4 py-2 bg-navy-light hover:bg-navy-light/80 rounded-lg transition-colors z-50 text-cream border border-cyan-dim"
+              className="fixed top-4 left-4 px-4 py-2 bg-magenta/20 hover:bg-magenta/30 rounded-lg transition-colors z-50 text-magenta border border-magenta/40"
             >
-              Back
+              ← Back
             </button>
             <div className="pt-12">
               <DeckLibrary onOpenDeck={setOpenDeckId} onPlayDeck={onPlayDeck} />

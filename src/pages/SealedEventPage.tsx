@@ -80,7 +80,7 @@ function SealedEventContent() {
           <div className="mb-4">
             <button
               onClick={leaveEvent}
-              className="px-4 py-2 bg-navy-light hover:bg-navy-light/80 rounded-lg transition-colors text-cream"
+              className="px-4 py-2 bg-magenta/20 hover:bg-magenta/30 rounded-lg transition-colors text-magenta border border-magenta/40"
             >
               ← Leave Event
             </button>

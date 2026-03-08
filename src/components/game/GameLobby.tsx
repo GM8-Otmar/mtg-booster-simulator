@@ -7,11 +7,12 @@ import { createSandboxGame, createSandboxGameFromDeck } from '../../utils/sandbo
 interface GameLobbyProps {
   onEnterTable: (isSandbox?: boolean) => void;
   pendingDeck?: DeckRecord | null;
+  onBack?: () => void;
 }
 
 type LobbyTab = 'create' | 'join';
 
-export default function GameLobby({ onEnterTable, pendingDeck }: GameLobbyProps) {
+export default function GameLobby({ onEnterTable, pendingDeck, onBack }: GameLobbyProps) {
   const { createGame, joinGame, loadSandbox, loading, error } = useGameTable();
   const [tab, setTab] = useState<LobbyTab>('create');
   const [createName, setCreateName] = useState('');
@@ -73,6 +74,14 @@ export default function GameLobby({ onEnterTable, pendingDeck }: GameLobbyProps)
   return (
     <div className="min-h-screen bg-navy text-cream flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="mb-4 px-4 py-2 bg-magenta/20 hover:bg-magenta/30 rounded-lg transition-colors text-magenta border border-magenta/40 text-sm"
+          >
+            ← Back
+          </button>
+        )}
         <h1 className="text-4xl font-bold text-center mb-2 text-cream">Game Table</h1>
         <p className="text-center text-cream-muted mb-8 text-sm">
           Play with friends - import any deck, any format

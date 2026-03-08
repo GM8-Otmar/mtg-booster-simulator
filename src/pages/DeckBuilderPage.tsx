@@ -16,6 +16,7 @@ import {
   clearPreferredPrinting,
   promoteCardToCommander,
   removeCardFromSection,
+  moveCardBetweenSections,
   renameDeck as renameDeckRecord,
   setDeckIcon,
   setFormat as setDeckFormat,
@@ -170,6 +171,10 @@ function BuilderContent({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
     updateDeck(current => promoteCardToCommander(current, section, cardName));
   };
 
+  const handleRemoveCommander = (cardName: string) => {
+    updateDeck(current => moveCardBetweenSections(current, 'commander', 'mainboard', cardName));
+  };
+
   const handleIncrement = (section: DeckSection, cardName: string) => {
     updateDeck(current => changeCardCount(
       current,
@@ -299,9 +304,9 @@ function BuilderContent({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
           <p className="text-red-400">{builderError ?? error ?? 'Deck not found'}</p>
           <button
             onClick={onBack}
-            className="px-4 py-2 bg-navy-light hover:bg-navy-light/80 rounded-lg border border-cyan-dim"
+            className="px-4 py-2 bg-magenta/20 hover:bg-magenta/30 rounded-lg border border-magenta/40 text-magenta"
           >
-            Back to Library
+            ← Back to Library
           </button>
         </div>
       </div>
@@ -314,9 +319,9 @@ function BuilderContent({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
         <div>
           <button
             onClick={onBack}
-            className="mb-3 px-4 py-2 bg-navy-light hover:bg-navy-light/80 rounded-lg border border-cyan-dim text-sm"
+            className="mb-3 px-4 py-2 bg-magenta/20 hover:bg-magenta/30 rounded-lg border border-magenta/40 text-magenta text-sm"
           >
-            Back to Library
+            ← Back to Library
           </button>
           <h1 className="text-3xl font-bold text-cream">{title}</h1>
           <p className="text-cream-muted text-sm">
@@ -368,6 +373,7 @@ function BuilderContent({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
           onSearch={handleSearch}
           onAddToMainboard={card => handleAddToSection('mainboard', card)}
           onAddToSideboard={card => handleAddToSection('sideboard', card)}
+          onAddToMaybeboard={card => handleAddToSection('maybeboard', card)}
           onSetCommander={handleSetCommander}
           canSetCommander={deck.commander.length === 0}
         />
@@ -383,6 +389,7 @@ function BuilderContent({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
             onRemove={handleRemove}
             onChoosePrinting={handleOpenPrintingPicker}
             onClearPrinting={handleClearPrinting}
+            onRemoveCommander={handleRemoveCommander}
           />
           <DeckSectionView
             title="Mainboard"
@@ -390,6 +397,7 @@ function BuilderContent({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
             entries={deck.mainboard}
             fallbackPrintings={fallbackPrintings}
             canAddCommanderFromContext={deck.commander.length === 0}
+            searchable
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
             onRemove={handleRemove}
@@ -402,26 +410,30 @@ function BuilderContent({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
             section="sideboard"
             entries={deck.sideboard}
             fallbackPrintings={fallbackPrintings}
+            canAddCommanderFromContext={deck.commander.length === 0}
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
             onRemove={handleRemove}
             onChoosePrinting={handleOpenPrintingPicker}
             onClearPrinting={handleClearPrinting}
+            onSetAsCommander={handlePromoteCommander}
           />
           <DeckSectionView
             title="Maybeboard"
             section="maybeboard"
             entries={deck.maybeboard}
             fallbackPrintings={fallbackPrintings}
+            canAddCommanderFromContext={deck.commander.length === 0}
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
             onRemove={handleRemove}
             onChoosePrinting={handleOpenPrintingPicker}
             onClearPrinting={handleClearPrinting}
+            onSetAsCommander={handlePromoteCommander}
           />
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 sticky top-6 self-start max-h-[calc(100vh-3rem)] overflow-y-auto">
           <DeckMetadataPanel
             name={deck.name}
             format={deck.format}

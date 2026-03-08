@@ -22,9 +22,9 @@ function App() {
       <div>
         <button
           onClick={() => setMode(null)}
-          className="fixed top-4 left-4 px-4 py-2 bg-navy-light hover:bg-navy-light/80 rounded-lg transition-colors z-50 text-cream border border-cyan-dim"
+          className="fixed top-4 left-4 px-4 py-2 bg-magenta/20 hover:bg-magenta/30 rounded-lg transition-colors z-50 text-magenta border border-magenta/40"
         >
-          Back
+          ← Back
         </button>
         <RandomPackPage />
       </div>
@@ -36,9 +36,9 @@ function App() {
       <div>
         <button
           onClick={() => setMode(null)}
-          className="fixed top-4 left-4 px-4 py-2 bg-navy-light hover:bg-navy-light/80 rounded-lg transition-colors z-50 text-cream border border-cyan-dim"
+          className="fixed top-4 left-4 px-4 py-2 bg-magenta/20 hover:bg-magenta/30 rounded-lg transition-colors z-50 text-magenta border border-magenta/40"
         >
-          Back
+          ← Back
         </button>
         <SealedEventPage />
       </div>
@@ -51,6 +51,7 @@ function App() {
         <GameTablePage
           pendingDeck={pendingDeck}
           onPendingDeckConsumed={() => setPendingDeck(null)}
+          onBack={() => setMode(null)}
         />
       </GameTableProvider>
     );

@@ -15,15 +15,22 @@ export async function searchDeckCards(query: string): Promise<ScryfallCard[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const response = await client.get<SearchResponse>('/cards/search', {
-    params: {
-      q: `${trimmed} game:paper`,
-      unique: 'cards',
-      order: 'name',
-    },
-  });
+  try {
+    const response = await client.get<SearchResponse>('/cards/search', {
+      params: {
+        q: `${trimmed} game:paper`,
+        unique: 'cards',
+        order: 'name',
+      },
+    });
 
-  return response.data.data ?? [];
+    return response.data.data ?? [];
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) {
+      return [];
+    }
+    throw err;
+  }
 }
 
 export async function searchCardPrintings(cardName: string): Promise<ScryfallCard[]> {

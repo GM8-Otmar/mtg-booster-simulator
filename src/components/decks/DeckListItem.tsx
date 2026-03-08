@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import type { DeckSummary } from '../../types/deck';
+import { getDeckIcon } from '../../utils/deckIcons';
 
 interface DeckListItemProps {
   deck: DeckSummary;
@@ -66,18 +67,32 @@ export default function DeckListItem({
         onClick={() => onOpen(deck.id)}
         className="block w-full text-left"
       >
-        <div className="h-36 bg-navy relative overflow-hidden">
+        <div className="h-44 bg-navy relative overflow-hidden">
           {deck.coverImageUri ? (
             <img
               src={deck.coverImageUri}
               alt={deck.commanderNames[0] ?? deck.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover object-top"
             />
           ) : (
             <div className="w-full h-full bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.28),_transparent_45%),linear-gradient(135deg,_rgba(15,23,42,1),_rgba(30,41,59,1)_55%,_rgba(168,85,247,0.18))] flex items-center justify-center">
-              <span className="text-5xl font-black text-cream/80">{deck.icon ?? coverInitial}</span>
+              {(() => {
+                const IconComp = getDeckIcon(deck.icon);
+                if (IconComp) return <IconComp size={48} className="text-cream/80" />;
+                return <span className="text-5xl font-black text-cream/80">{coverInitial}</span>;
+              })()}
             </div>
           )}
+          {/* Deck icon badge — top-right corner */}
+          {(() => {
+            const BadgeIcon = getDeckIcon(deck.icon);
+            if (!BadgeIcon) return null;
+            return (
+              <div className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-magenta/20 border border-magenta/40 backdrop-blur-sm flex items-center justify-center">
+                <BadgeIcon size={16} className="text-magenta" />
+              </div>
+            );
+          })()}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-navy via-navy/75 to-transparent px-4 py-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-cyan/20 text-cyan">

@@ -22,9 +22,10 @@ import { CardInspectorProvider } from '../components/game/CardInspectorPanel';
 interface GameTablePageProps {
   pendingDeck?: DeckRecord | null;
   onPendingDeckConsumed?: () => void;
+  onBack?: () => void;
 }
 
-export default function GameTablePage({ pendingDeck, onPendingDeckConsumed }: GameTablePageProps) {
+export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBack }: GameTablePageProps) {
   const {
     room, playerId, leaveGame,
     myPlayer, myHandCards, myBattlefieldCards,
@@ -135,6 +136,7 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed }: Ga
     return (
       <GameLobby
         pendingDeck={pendingDeck}
+        onBack={onBack}
         onEnterTable={(sandbox) => {
           setAtTable(true);
           setShowImportAfterJoin(!sandbox && !pendingDeck);
@@ -169,9 +171,9 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed }: Ga
         <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => { leaveGame(); setAtTable(false); }}
-            className="text-cream-muted hover:text-cream text-sm px-2 py-1 rounded border border-cyan-dim hover:border-cyan transition-all"
+            className="text-magenta text-sm px-3 py-1.5 rounded-lg bg-magenta/20 hover:bg-magenta/30 border border-magenta/40 transition-all"
           >
-            &larr; Leave
+            ← Leave
           </button>
           <span className="text-cream font-bold">🃏 Game Table</span>
           {isSandbox ? (

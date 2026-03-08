@@ -1,4 +1,5 @@
 import type { DeckFormat } from '../../types/deck';
+import { DECK_ICON_CHOICES, getDeckIcon } from '../../utils/deckIcons';
 
 interface DeckMetadataPanelProps {
   name: string;
@@ -13,8 +14,6 @@ interface DeckMetadataPanelProps {
   onIconChange: (value: string | null) => void;
 }
 
-const ICON_CHOICES = ['D', 'C', 'A', 'F', 'S', 'W'];
-
 export default function DeckMetadataPanel({
   name,
   format,
@@ -27,6 +26,8 @@ export default function DeckMetadataPanel({
   onNotesChange,
   onIconChange,
 }: DeckMetadataPanelProps) {
+  const CoverIcon = getDeckIcon(icon);
+
   return (
     <div className="bg-navy-light rounded-xl p-4 border border-cyan-dim space-y-4">
       <div>
@@ -41,8 +42,10 @@ export default function DeckMetadataPanel({
           <div className="w-[88px] h-[120px] rounded-xl overflow-hidden border border-cyan-dim bg-navy flex items-center justify-center">
             {commanderImageUri ? (
               <img src={commanderImageUri} alt={commanderName ?? name} className="w-full h-full object-cover" />
+            ) : CoverIcon ? (
+              <CoverIcon size={36} className="text-cream/75" />
             ) : (
-              <span className="text-3xl font-black text-cream/75">{icon ?? name[0] ?? 'D'}</span>
+              <span className="text-3xl font-black text-cream/75">{name[0] ?? 'D'}</span>
             )}
           </div>
           <p className="text-[11px] text-cream-muted text-center">
@@ -53,24 +56,29 @@ export default function DeckMetadataPanel({
         <div className="space-y-2">
           <label className="block text-xs uppercase tracking-wide text-cream-muted">Deck Icon</label>
           <div className="flex flex-wrap gap-2">
-            {ICON_CHOICES.map(choice => (
+            {DECK_ICON_CHOICES.map(({ key, Icon }) => (
               <button
-                key={choice}
+                key={key}
                 type="button"
-                onClick={() => onIconChange(choice)}
-                className={`w-9 h-9 rounded-lg border text-sm font-bold transition-colors ${
-                  icon === choice
+                onClick={() => onIconChange(key)}
+                className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors ${
+                  icon === key
                     ? 'bg-cyan text-navy border-cyan'
                     : 'bg-navy border-cyan-dim text-cream hover:border-cyan/60'
                 }`}
+                title={key}
               >
-                {choice}
+                <Icon size={18} />
               </button>
             ))}
             <button
               type="button"
               onClick={() => onIconChange(null)}
-              className="px-3 h-9 rounded-lg border border-cyan-dim bg-navy text-xs font-semibold text-cream-muted hover:text-cream"
+              className={`px-3 h-9 rounded-lg border text-xs font-semibold transition-colors ${
+                icon == null
+                  ? 'bg-cyan text-navy border-cyan'
+                  : 'border-cyan-dim bg-navy text-cream-muted hover:text-cream'
+              }`}
             >
               Auto
             </button>

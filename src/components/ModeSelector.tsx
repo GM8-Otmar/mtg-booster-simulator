@@ -26,7 +26,7 @@ export default function ModeSelector({ onSelectMode }: ModeSelectorProps) {
     <div className="min-h-screen bg-navy text-cream p-8">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-5xl font-bold text-center mb-4 text-cream">
-          MTG Booster Simulator
+          Kitchen Table Magic
         </h1>
         <p className="text-center text-cream-muted mb-12">
           Choose your experience
@@ -39,7 +39,7 @@ export default function ModeSelector({ onSelectMode }: ModeSelectorProps) {
           >
             <div className="absolute inset-0 bg-cyan-dim/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative">
-              <h2 className="text-3xl font-bold mb-4 text-cyan">Random Pack Mode</h2>
+              <h2 className="text-3xl font-bold mb-4 text-cyan">Random Pack</h2>
               <p className="text-cream-muted mb-4">
                 Open booster packs one at a time and enjoy the thrill of the pull!
               </p>
@@ -50,6 +50,28 @@ export default function ModeSelector({ onSelectMode }: ModeSelectorProps) {
                   'See card prices and pack values',
                   'Experience realistic foil pulls',
                   'Solo play, instant gratification',
+                ]}
+              />
+            </div>
+          </button>
+
+          <button
+            onClick={() => onSelectMode('sealed')}
+            className="group relative bg-navy-light rounded-xl p-8 border-2 border-cyan-dim hover:border-magenta transition-all duration-300 hover:scale-105 text-left"
+          >
+            <div className="absolute inset-0 bg-magenta-dim/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative">
+              <h2 className="text-3xl font-bold mb-4 text-magenta">Sealed Event</h2>
+              <p className="text-cream-muted mb-4">
+                Host or join a sealed event with friends for competitive play!
+              </p>
+              <FeatureList
+                color="text-magenta"
+                items={[
+                  'Open 6 packs to build a card pool',
+                  'Select a legendary commander',
+                  'View pool organized by color',
+                  'Export deck for untap.gg',
                 ]}
               />
             </div>
@@ -72,28 +94,6 @@ export default function ModeSelector({ onSelectMode }: ModeSelectorProps) {
                   'Open local JSON deck files',
                   'Save decks locally with folder sync when supported',
                   'Resume recent decks from a real deck shelf',
-                ]}
-              />
-            </div>
-          </button>
-
-          <button
-            onClick={() => onSelectMode('sealed')}
-            className="group relative bg-navy-light rounded-xl p-8 border-2 border-cyan-dim hover:border-magenta transition-all duration-300 hover:scale-105 text-left"
-          >
-            <div className="absolute inset-0 bg-magenta-dim/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className="relative">
-              <h2 className="text-3xl font-bold mb-4 text-magenta">Sealed Event Mode</h2>
-              <p className="text-cream-muted mb-4">
-                Host or join a sealed event with friends for competitive play!
-              </p>
-              <FeatureList
-                color="text-magenta"
-                items={[
-                  'Open 6 packs to build a card pool',
-                  'Select a legendary commander',
-                  'View pool organized by color',
-                  'Export deck for untap.gg',
                 ]}
               />
             </div>

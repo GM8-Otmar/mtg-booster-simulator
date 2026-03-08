@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getCardImageUrl, type ScryfallCard } from '../../types/card';
 
 interface PrintingPickerModalProps {
@@ -25,12 +25,56 @@ export default function PrintingPickerModal({
   onClear,
 }: PrintingPickerModalProps) {
   const [selectedId, setSelectedId] = useState<string | null>(currentPrintingId ?? null);
+  const selectedButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setSelectedId(currentPrintingId ?? null);
   }, [currentPrintingId, cardName]);
 
   const selectedCard = printings.find(card => card.id === selectedId) ?? null;
+
+  // Arrow key navigation through printings
+  const navigatePrintings = useCallback(
+    (direction: -1 | 1) => {
+      if (printings.length === 0) return;
+      const currentIdx = printings.findIndex(c => c.id === selectedId);
+      let nextIdx: number;
+      if (currentIdx < 0) {
+        nextIdx = direction === 1 ? 0 : printings.length - 1;
+      } else {
+        nextIdx = currentIdx + direction;
+        if (nextIdx < 0) nextIdx = printings.length - 1;
+        if (nextIdx >= printings.length) nextIdx = 0;
+      }
+      setSelectedId(printings[nextIdx]!.id);
+    },
+    [printings, selectedId],
+  );
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigatePrintings(-1);
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigatePrintings(1);
+      } else if (e.key === 'Enter' && selectedCard) {
+        e.preventDefault();
+        onChoose(selectedCard);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [navigatePrintings, selectedCard, onChoose, onClose]);
+
+  // Scroll selected button into view when selection changes via keyboard
+  useEffect(() => {
+    selectedButtonRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedId]);
 
   return (
     <div
@@ -46,6 +90,7 @@ export default function PrintingPickerModal({
           <div>
             <h2 className="text-xl font-bold text-cream">Choose Printing</h2>
             <p className="text-sm text-cream-muted">{cardName}</p>
+            <p className="text-[10px] text-cream-muted/50 mt-1">← → arrow keys to browse · Enter to confirm</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -63,9 +108,9 @@ export default function PrintingPickerModal({
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-[340px_minmax(0,1fr)] max-h-[calc(90vh-73px)]">
-          <div className="border-r border-cyan-dim p-5 bg-navy-light/50">
-            <div className="rounded-xl border border-cyan-dim bg-navy p-4 space-y-4 sticky top-0">
+        <div className="flex max-h-[calc(90vh-73px)]">
+          <div className="w-[340px] shrink-0 border-r border-cyan-dim p-5 bg-navy-light/50 overflow-y-auto">
+            <div className="rounded-xl border border-cyan-dim bg-navy p-4 space-y-4">
               {selectedCard ? (
                 <>
                   {getCardImageUrl(selectedCard, 'normal') ? (
@@ -117,7 +162,7 @@ export default function PrintingPickerModal({
             </div>
           </div>
 
-          <div className="overflow-y-auto p-5">
+          <div className="flex-1 min-w-0 overflow-y-auto p-5">
             {loading && (
               <p className="text-cream-muted text-sm">Loading printings...</p>
             )}
@@ -142,6 +187,7 @@ export default function PrintingPickerModal({
                   return (
                     <button
                       key={`${card.id}-${card.collector_number}`}
+                      ref={isSelected ? selectedButtonRef : undefined}
                       type="button"
                       onClick={() => setSelectedId(card.id)}
                       className={`text-left rounded-xl border p-3 transition-colors ${

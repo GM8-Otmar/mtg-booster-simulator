@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useCardInspector } from '../game/CardInspectorPanel';
+import { getCachedOracle, prefetchOracles } from '../../utils/scryfallOracle';
 import type { DeckCardEntry, DeckSection, PreferredPrinting } from '../../types/deck';
 
 interface DeckSectionViewProps {
@@ -8,12 +9,14 @@ interface DeckSectionViewProps {
   entries: DeckCardEntry[];
   fallbackPrintings?: Record<string, PreferredPrinting | null>;
   canAddCommanderFromContext?: boolean;
+  searchable?: boolean;
   onIncrement: (section: DeckSection, cardName: string) => void;
   onDecrement: (section: DeckSection, cardName: string) => void;
   onRemove: (section: DeckSection, cardName: string) => void;
   onChoosePrinting: (section: DeckSection, cardName: string) => void;
   onClearPrinting: (section: DeckSection, cardName: string) => void;
   onSetAsCommander?: (section: DeckSection, cardName: string) => void;
+  onRemoveCommander?: (cardName: string) => void;
 }
 
 export default function DeckSectionView({
@@ -22,16 +25,61 @@ export default function DeckSectionView({
   entries,
   fallbackPrintings = {},
   canAddCommanderFromContext = false,
+  searchable = false,
   onIncrement,
   onDecrement,
   onRemove,
   onChoosePrinting,
   onClearPrinting,
   onSetAsCommander,
+  onRemoveCommander,
 }: DeckSectionViewProps) {
   const total = entries.reduce((sum, entry) => sum + entry.count, 0);
   const { inspect, hoverInspect, clearHoverInspect } = useCardInspector();
   const [menu, setMenu] = useState<{ cardName: string; x: number; y: number } | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [oracleReady, setOracleReady] = useState(false);
+
+  // Prefetch oracle data for all cards in the section so type/text search works
+  useEffect(() => {
+    if (!searchable || entries.length === 0) return;
+    const names = entries.map(e => e.cardName);
+    const allCached = names.every(n => getCachedOracle(n) !== undefined);
+    if (allCached) { setOracleReady(true); return; }
+    prefetchOracles(names).then(() => setOracleReady(true)).catch(() => setOracleReady(true));
+  }, [searchable, entries]);
+
+  const filteredEntries = useMemo(() => {
+    if (!searchTerm.trim()) return entries;
+    const q = searchTerm.toLowerCase().trim();
+
+    // Score each entry: name > type line > oracle text (same logic as LibrarySearchOverlay)
+    const scored = entries.map(entry => {
+      const name = entry.cardName.toLowerCase();
+      // Name matches — highest priority
+      if (name === q) return { entry, score: 10 };
+      if (name.startsWith(q)) return { entry, score: 8 };
+      if (name.includes(q)) return { entry, score: 6 };
+
+      // Type line + oracle text from cached Scryfall data
+      const oracle = getCachedOracle(entry.cardName);
+      if (oracle) {
+        const typeLine = oracle.typeLine.toLowerCase();
+        if (typeLine === q) return { entry, score: 5 };
+        if (typeLine.includes(q)) return { entry, score: 4 };
+
+        const oracleText = oracle.oracleText.toLowerCase();
+        if (oracleText.includes(q)) return { entry, score: 2 };
+      }
+
+      return { entry, score: 0 };
+    });
+
+    return scored
+      .filter(s => s.score > 0)
+      .sort((a, b) => b.score - a.score || a.entry.cardName.localeCompare(b.entry.cardName))
+      .map(s => s.entry);
+  }, [entries, searchTerm, oracleReady]);
 
   return (
     <div
@@ -43,11 +91,30 @@ export default function DeckSectionView({
         <span className="text-xs text-cream-muted">{total} cards</span>
       </div>
 
+      {searchable && entries.length > 0 && (
+        <div className="px-4 pt-3 pb-1">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Name, type, or rules text…"
+            className="w-full bg-navy border border-cyan-dim rounded-lg px-3 py-1.5 text-cream text-xs placeholder-cream-muted/40 focus:outline-none focus:border-cyan"
+          />
+          {searchTerm.trim() && (
+            <p className="text-[10px] text-cream-muted mt-1">
+              Showing {filteredEntries.length} of {entries.length} cards
+            </p>
+          )}
+        </div>
+      )}
+
       {entries.length === 0 ? (
         <p className="px-4 py-6 text-sm text-cream-muted">No cards in this section yet.</p>
+      ) : filteredEntries.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-cream-muted">No cards match &ldquo;{searchTerm}&rdquo;</p>
       ) : (
         <div className="divide-y divide-cyan-dim/40">
-          {entries.map(entry => {
+          {filteredEntries.map(entry => {
             const displayPrinting = entry.preferredPrinting ?? fallbackPrintings[entry.cardName.toLowerCase()] ?? null;
             const inspectCard = {
               name: entry.cardName,
@@ -61,11 +128,9 @@ export default function DeckSectionView({
               <div
                 key={`${section}-${entry.cardName}`}
                 className="px-4 py-3 flex items-center gap-3 cursor-pointer"
-                onClick={() => inspect(inspectCard)}
-                onMouseEnter={() => hoverInspect(inspectCard)}
+                onMouseEnter={() => { inspect(inspectCard); hoverInspect(inspectCard); }}
                 onMouseLeave={clearHoverInspect}
                 onContextMenu={event => {
-                  if (!canAddCommanderFromContext || !onSetAsCommander) return;
                   event.preventDefault();
                   setMenu({ cardName: entry.cardName, x: event.clientX, y: event.clientY });
                 }}
@@ -91,26 +156,6 @@ export default function DeckSectionView({
                   <button
                     onClick={event => {
                       event.stopPropagation();
-                      onChoosePrinting(section, entry.cardName);
-                    }}
-                    className="px-2 py-1 rounded-md bg-navy hover:bg-navy-light border border-cyan-dim text-cyan text-xs font-semibold"
-                  >
-                    {entry.preferredPrinting ? 'Art' : 'Pick Art'}
-                  </button>
-                  {entry.preferredPrinting && (
-                    <button
-                      onClick={event => {
-                        event.stopPropagation();
-                        onClearPrinting(section, entry.cardName);
-                      }}
-                      className="px-2 py-1 rounded-md bg-navy hover:bg-navy-light border border-cyan-dim text-cream-muted text-xs font-semibold"
-                    >
-                      Clear
-                    </button>
-                  )}
-                  <button
-                    onClick={event => {
-                      event.stopPropagation();
                       onDecrement(section, entry.cardName);
                     }}
                     className="w-7 h-7 rounded-md bg-navy hover:bg-navy-light border border-cyan-dim text-cream"
@@ -127,15 +172,6 @@ export default function DeckSectionView({
                   >
                     +
                   </button>
-                  <button
-                    onClick={event => {
-                      event.stopPropagation();
-                      onRemove(section, entry.cardName);
-                    }}
-                    className="px-2 py-1 rounded-md bg-magenta/20 hover:bg-magenta/30 border border-magenta/40 text-magenta text-xs font-semibold"
-                  >
-                    Remove
-                  </button>
                 </div>
               </div>
             );
@@ -143,19 +179,53 @@ export default function DeckSectionView({
         </div>
       )}
 
-      {menu && canAddCommanderFromContext && onSetAsCommander && (
+      {menu && (
         <div
-          className="fixed z-50 min-w-[160px] rounded-lg border border-cyan-dim bg-navy-light shadow-xl py-1"
+          className="fixed z-50 min-w-[180px] rounded-lg border border-cyan-dim bg-navy-light shadow-xl py-1"
           style={{ left: menu.x, top: menu.y }}
         >
           <button
             onClick={() => {
-              onSetAsCommander(section, menu.cardName);
+              onChoosePrinting(section, menu.cardName);
+              setMenu(null);
+            }}
+            className="w-full text-left px-3 py-2 text-sm text-cream hover:bg-navy transition-colors"
+          >
+            Pick Art
+          </button>
+
+          {section !== 'commander' && canAddCommanderFromContext && onSetAsCommander && (
+            <button
+              onClick={() => {
+                onSetAsCommander(section, menu.cardName);
+                setMenu(null);
+              }}
+              className="w-full text-left px-3 py-2 text-sm text-cyan hover:bg-navy transition-colors"
+            >
+              Set as Commander
+            </button>
+          )}
+
+          {section === 'commander' && onRemoveCommander && (
+            <button
+              onClick={() => {
+                onRemoveCommander(menu.cardName);
+                setMenu(null);
+              }}
+              className="w-full text-left px-3 py-2 text-sm text-magenta hover:bg-navy transition-colors"
+            >
+              Remove Commander
+            </button>
+          )}
+
+          <button
+            onClick={() => {
+              onRemove(section, menu.cardName);
               setMenu(null);
             }}
             className="w-full text-left px-3 py-2 text-sm text-magenta hover:bg-navy transition-colors"
           >
-            Add as Commander
+            Remove
           </button>
         </div>
       )}
