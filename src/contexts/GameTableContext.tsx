@@ -340,7 +340,8 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      await post(`/${gameRoomId}/import-deck`, { playerId, deck });
+      const data = await post(`/${gameRoomId}/import-deck`, { playerId, deck });
+      if (data?.room) setRoom(data.room);
       socketRef.current?.emit('game:join', { gameRoomId, playerId });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to import deck');

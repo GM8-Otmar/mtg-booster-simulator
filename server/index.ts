@@ -26,7 +26,7 @@ app.use(cors({
   origin: true,
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
 // API Routes
 app.use('/api/events', eventsRouter);

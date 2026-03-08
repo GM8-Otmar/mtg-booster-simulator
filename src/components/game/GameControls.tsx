@@ -10,7 +10,7 @@ import {
   CircleDot, Plus, Upload,
 } from 'lucide-react';
 import { useGameTable } from '../../contexts/GameTableContext';
-import DeckImportModal from './DeckImportModal';
+import DeckPickerModal from './DeckPickerModal';
 import TokenCreatorModal from './TokenCreatorModal';
 import DiceRollerModal from './DiceRollerModal';
 import CoinFlipModal from './CoinFlipModal';
@@ -283,10 +283,10 @@ export default function GameControls({ onConcede: _onConcede }: GameControlsProp
             isExpanded={isOpen}
           />
 
-          {/* ── Import / Reload Deck ─────────────────────────────────── */}
+          {/* ── Load Deck (from library) ─────────────────────────────── */}
           <SidebarItem
             icon={<Upload className={iconSize} />}
-            label="Import Deck"
+            label="Load Deck"
             onClick={() => setShowImport(true)}
             className={activeBtn}
             isExpanded={isOpen}
@@ -325,7 +325,12 @@ export default function GameControls({ onConcede: _onConcede }: GameControlsProp
         </div>
       )}
 
-      {showImport && <DeckImportModal onClose={() => setShowImport(false)} />}
+      {showImport && (
+        <DeckPickerModal
+          source="manual-load-button"
+          onClose={() => setShowImport(false)}
+        />
+      )}
       {showTokenCreator && <TokenCreatorModal onClose={() => setShowTokenCreator(false)} />}
       {showDiceRoller && <DiceRollerModal onClose={() => setShowDiceRoller(false)} />}
       {showCoinFlip && <CoinFlipModal onClose={() => setShowCoinFlip(false)} />}

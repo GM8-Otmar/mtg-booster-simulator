@@ -47,6 +47,7 @@ export interface DeckStorage {
 class FolderDeckStorage implements DeckStorage {
   private dirHandle: FileSystemDirectoryHandle | null = null;
   private initialized = false;
+  private initPromise: Promise<void> | null = null;
   private memoryDecks = new Map<string, DeckRecord>();
 
   getCapability(): DeckStorageCapability {
@@ -59,14 +60,31 @@ class FolderDeckStorage implements DeckStorage {
 
   async init(): Promise<void> {
     if (this.initialized) return;
-    this.initialized = true;
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
 
-    const handle = await loadDirectoryHandle();
-    if (!handle) return;
+    this.initPromise = (async () => {
+      const handle = await loadDirectoryHandle();
+      if (!handle) return;
 
-    const ok = await verifyPermission(handle).catch(() => false);
-    if (ok) {
-      this.dirHandle = handle;
+      // Use read permission for startup/listing so non-gesture opens
+      // (like auto-open deck picker after join) can still read deck files.
+      const ok = await verifyPermission(handle, 'read').catch(() => false);
+      if (ok) {
+        this.dirHandle = handle;
+        console.debug('[DeckStorage] restored folder handle with read permission');
+      } else {
+        console.debug('[DeckStorage] could not restore folder handle permission at init');
+      }
+    })();
+
+    try {
+      await this.initPromise;
+    } finally {
+      this.initialized = true;
+      this.initPromise = null;
     }
   }
 

@@ -98,36 +98,70 @@ interface ResolvedCard {
   backName?: string | null;
 }
 
+/** Sanitized deck card: name and count guaranteed safe for resolveNames/makeInstance. */
+interface SanitizedDeckCard {
+  name: string;
+  count: number;
+  preferredPrinting?: ImportedDeckCard['preferredPrinting'];
+}
+
 function isImportedDeckPayload(deck: ParsedDeck | ImportedDeckPayload): deck is ImportedDeckPayload {
-  return typeof deck.commander === 'object' || Array.isArray(deck.mainboard) && !!deck.mainboard[0] && 'preferredPrinting' in deck.mainboard[0];
+  // typeof null === 'object' in JS, so we must exclude null explicitly
+  return (deck.commander !== null && typeof deck.commander === 'object') ||
+    (Array.isArray(deck.mainboard) && !!deck.mainboard[0] && 'preferredPrinting' in deck.mainboard[0]);
+}
+
+function sanitizeImportedEntry(entry: ImportedDeckCard | { name: string; count: number } | null | undefined): SanitizedDeckCard {
+  const rawName = entry && typeof entry === 'object' && 'name' in entry ? entry.name : undefined;
+  const name = typeof rawName === 'string' ? rawName.trim() || 'Unknown' : String(rawName ?? 'Unknown').trim() || 'Unknown';
+  const count = entry && typeof entry.count === 'number' && Number.isInteger(entry.count) && entry.count > 0
+    ? entry.count
+    : 1;
+  const preferredPrinting = entry && 'preferredPrinting' in entry && entry.preferredPrinting != null
+    ? (typeof entry.preferredPrinting === 'object' && typeof (entry.preferredPrinting as any).scryfallId === 'string')
+      ? {
+          scryfallId: (entry.preferredPrinting as any).scryfallId,
+          imageUri: (entry.preferredPrinting as any).imageUri ?? null,
+          backImageUri: (entry.preferredPrinting as any).backImageUri ?? null,
+          backName: (entry.preferredPrinting as any).backName ?? null,
+        }
+      : undefined
+    : undefined;
+  return { name, count, preferredPrinting };
 }
 
 function normalizeImportedDeck(deck: ParsedDeck | ImportedDeckPayload): {
-  commander: ImportedDeckCard | null;
-  mainboard: ImportedDeckCard[];
-  sideboard: ImportedDeckCard[];
+  commander: SanitizedDeckCard | null;
+  mainboard: SanitizedDeckCard[];
+  sideboard: SanitizedDeckCard[];
 } {
   if (isImportedDeckPayload(deck)) {
-    return deck;
+    return {
+      commander: deck.commander ? sanitizeImportedEntry(deck.commander) : null,
+      mainboard: (Array.isArray(deck.mainboard) ? deck.mainboard : []).map(sanitizeImportedEntry),
+      sideboard: (Array.isArray(deck.sideboard) ? deck.sideboard : []).map(sanitizeImportedEntry),
+    };
   }
-
+  const mainboard = Array.isArray(deck.mainboard) ? deck.mainboard : [];
+  const sideboard = Array.isArray(deck.sideboard) ? deck.sideboard : [];
   return {
-    commander: deck.commander ? { name: deck.commander, count: 1 } : null,
-    mainboard: deck.mainboard.map(entry => ({ name: entry.name, count: entry.count })),
-    sideboard: deck.sideboard.map(entry => ({ name: entry.name, count: entry.count })),
+    commander: deck.commander ? sanitizeImportedEntry({ name: String(deck.commander ?? 'Unknown'), count: 1 }) : null,
+    mainboard: mainboard.map(e => sanitizeImportedEntry({ name: e?.name ?? 'Unknown', count: e?.count ?? 1 })),
+    sideboard: sideboard.map(e => sanitizeImportedEntry({ name: e?.name ?? 'Unknown', count: e?.count ?? 1 })),
   };
 }
 
 /** Resolve card names via Scryfall /cards/collection (up to 75 per call). */
 async function resolveNames(
-  entries: ImportedDeckCard[],
+  entries: SanitizedDeckCard[],
 ): Promise<Map<string, ResolvedCard>> {
   const result = new Map<string, ResolvedCard>();
   const unresolvedEntries = entries.filter(entry => !entry.preferredPrinting?.scryfallId);
 
   for (const entry of entries) {
     if (entry.preferredPrinting?.scryfallId) {
-      result.set(entry.name.toLowerCase(), {
+      const key = typeof entry.name === 'string' ? entry.name : String(entry.name ?? '').trim() || 'unknown';
+      result.set(key.toLowerCase(), {
         scryfallId: entry.preferredPrinting.scryfallId,
         imageUri: entry.preferredPrinting.imageUri,
         backImageUri: entry.preferredPrinting.backImageUri ?? null,
@@ -148,18 +182,19 @@ async function resolveNames(
         const imageUri = card.id
           ? scryfallImg(card.id, 'front')
           : (card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null);
-        // DFC back face: check if card has two faces
         const hasDFC = card.card_faces && card.card_faces.length >= 2;
         const backImageUri = hasDFC && card.id ? scryfallImg(card.id, 'back') : null;
-        const backName = hasDFC ? card.card_faces[1].name : null;
+        const backName = hasDFC ? (card.card_faces[1]?.name ?? null) : null;
         const resolved: ResolvedCard = { scryfallId: card.id, imageUri, backImageUri, backName };
-        result.set(card.name.toLowerCase(), resolved);
-        // DFCs: Scryfall returns "Front // Back" but deck lists use just the front name
+        const cardName = String(card.name ?? '').trim() || 'unknown';
+        result.set(cardName.toLowerCase(), resolved);
         if (hasDFC && card.card_faces[0]?.name) {
-          result.set(card.card_faces[0].name.toLowerCase(), resolved);
+          result.set(String(card.card_faces[0].name).toLowerCase(), resolved);
         }
       }
-    } catch { /* partial failure — cards not found get null imageUri */ }
+    } catch (err) {
+      console.warn('[resolveNames] Scryfall batch failed:', err instanceof Error ? err.message : err);
+    }
     if (i + 75 < unique.length) await new Promise(r => setTimeout(r, 100));
   }
   return result;
@@ -179,8 +214,8 @@ export async function importDeck(
   if (!player) throw new Error('Player not found');
   // Commander is optional — the user may import the 99 first, then add commander separately
 
-  // resolve names via Scryfall unless provided
   const normalizedDeck = normalizeImportedDeck(deck);
+
   const allEntries = [
     ...(normalizedDeck.commander ? [normalizedDeck.commander] : []),
     ...normalizedDeck.mainboard,
@@ -200,12 +235,14 @@ export async function importDeck(
   player.sideboardCardIds = [];
 
   function makeInstance(
-    name: string,
+    rawName: string | unknown,
     zone: BattlefieldCard['zone'],
     isCommander = false,
   ): string {
+    const name = typeof rawName === 'string' ? rawName : String(rawName ?? 'unknown');
+    const lookupKey = (typeof name === 'string' ? name : String(name ?? '')).toLowerCase();
     const instanceId = uuidv4();
-    const info = resolved.get(name.toLowerCase()) ?? { scryfallId: 'unknown', imageUri: null };
+    const info = resolved.get(lookupKey) ?? { scryfallId: 'unknown', imageUri: null };
     const card: BattlefieldCard = {
       instanceId,
       scryfallId: info.scryfallId,
@@ -286,15 +323,15 @@ export async function importCommander(
     }
   }
 
-  // Resolve via Scryfall
-  const resolved = await resolveNames([{ name: commanderName, count: 1 }]);
-  const info = resolved.get(commanderName.toLowerCase()) ?? { scryfallId: 'unknown', imageUri: null };
+  const safeCommanderName = typeof commanderName === 'string' ? commanderName : String(commanderName ?? 'Unknown');
+  const resolved = await resolveNames([{ name: safeCommanderName, count: 1 }]);
+  const info = resolved.get(safeCommanderName.toLowerCase()) ?? { scryfallId: 'unknown', imageUri: null };
 
   const instanceId = uuidv4();
   const card: BattlefieldCard = {
     instanceId,
     scryfallId: info.scryfallId,
-    name: commanderName,
+    name: safeCommanderName,
     imageUri: info.imageUri,
     backImageUri: info.backImageUri ?? null,
     backName: info.backName ?? null,

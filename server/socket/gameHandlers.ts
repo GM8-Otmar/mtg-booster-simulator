@@ -295,9 +295,9 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     for (const card of Object.values(room.cards)) {
       if (card.controller !== playerId) continue;
       if (card.zone !== 'battlefield') continue;
-      if (filter === 'lands' && !card.name.toLowerCase().includes('land')) {
-        // crude check — server has no type_line, use name heuristics
-        // client should filter properly; this is a best-effort fallback
+      if (filter === 'lands') {
+        const name = typeof card.name === 'string' ? card.name : String(card.name ?? '');
+        if (!name.toLowerCase().includes('land')) continue;
       }
       card.tapped = tapped;
       changed.push(card.instanceId);

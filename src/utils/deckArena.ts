@@ -10,7 +10,7 @@ import { createEmptyDeck, addCardToSection, touchUpdatedAt } from './deckRecord'
 import { getLatestCardPrinting } from '../services/deckCardSearch';
 import type { ScryfallCard } from '../types/card';
 import type { DeckCardEntry, DeckRecord, DeckFormat, DeckSource, PreferredPrinting } from '../types/deck';
-import type { ImportedDeckPayload } from '../types/game';
+import type { ImportedDeckCard, ImportedDeckPayload } from '../types/game';
 
 // Arena text -> DeckRecord
 
@@ -130,24 +130,35 @@ export function deckRecordToParsedDeck(deck: DeckRecord): {
   };
 }
 
+/** Strip to only the fields the server needs (scryfallId, imageUri, back face). */
+function stripPrinting(p: PreferredPrinting | null | undefined): ImportedDeckCard['preferredPrinting'] {
+  if (!p) return null;
+  return {
+    scryfallId: p.scryfallId,
+    imageUri: p.imageUri,
+    backImageUri: p.backImageUri ?? null,
+    backName: p.backName ?? null,
+  };
+}
+
 export function deckRecordToImportPayload(deck: DeckRecord): ImportedDeckPayload {
   return {
     commander: deck.commander[0]
       ? {
-          name: deck.commander[0].cardName,
+          name: String(deck.commander[0].cardName ?? 'Unknown'),
           count: 1,
-          preferredPrinting: deck.commander[0].preferredPrinting ?? null,
+          preferredPrinting: stripPrinting(deck.commander[0].preferredPrinting),
         }
       : null,
     mainboard: deck.mainboard.map(entry => ({
-      name: entry.cardName,
+      name: String(entry.cardName ?? 'Unknown'),
       count: entry.count,
-      preferredPrinting: entry.preferredPrinting ?? null,
+      preferredPrinting: stripPrinting(entry.preferredPrinting),
     })),
     sideboard: deck.sideboard.map(entry => ({
-      name: entry.cardName,
+      name: String(entry.cardName ?? 'Unknown'),
       count: entry.count,
-      preferredPrinting: entry.preferredPrinting ?? null,
+      preferredPrinting: stripPrinting(entry.preferredPrinting),
     })),
   };
 }
@@ -168,12 +179,12 @@ export async function deckRecordToSandboxImportPayload(
   };
 }
 
-async function buildImportedEntry(entry: DeckCardEntry) {
+async function buildImportedEntry(entry: DeckCardEntry): Promise<ImportedDeckCard> {
+  const printing = entry.preferredPrinting ?? (await getFallbackPrinting(entry.cardName));
   return {
-    name: entry.cardName,
+    name: String(entry.cardName ?? 'Unknown'),
     count: entry.count,
-    preferredPrinting:
-      entry.preferredPrinting ?? (await getFallbackPrinting(entry.cardName)),
+    preferredPrinting: printing ? stripPrinting(printing) : null,
   };
 }
 

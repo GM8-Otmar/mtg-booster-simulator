@@ -7,7 +7,7 @@ import PlayerBanner from '../components/game/PlayerBanner';
 import OpponentView from '../components/game/OpponentView';
 import GameControls from '../components/game/GameControls';
 import ScryOverlay from '../components/game/ScryOverlay';
-import DeckImportModal from '../components/game/DeckImportModal';
+import DeckPickerModal from '../components/game/DeckPickerModal';
 import ZoneCountHUD from '../components/game/ZoneCountHUD';
 import BottomBar from '../components/game/BottomBar';
 import CardHoverInspector from '../components/game/CardHoverInspector';
@@ -16,7 +16,7 @@ import TargetingOverlay from '../components/game/TargetingOverlay';
 import OpponentInfoPanel from '../components/game/OpponentInfoPanel';
 import type { DeckRecord } from '../types/deck';
 import type { BattlefieldCard } from '../types/game';
-import { deckRecordToImportPayload } from '../utils/deckArena';
+import { deckRecordToSandboxImportPayload } from '../utils/deckArena';
 import { CardInspectorProvider } from '../components/game/CardInspectorPanel';
 
 interface GameTablePageProps {
@@ -116,7 +116,13 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBa
 
     let cancelled = false;
 
-    importDeck(deckRecordToImportPayload(pendingDeck))
+    // Resolve all card printings client-side before sending to server
+    // so the server never needs to call Scryfall.
+    deckRecordToSandboxImportPayload(pendingDeck)
+      .then(payload => {
+        if (cancelled) return;
+        return importDeck(payload);
+      })
       .then(() => {
         if (cancelled) return;
         setPendingDeckImported(true);
@@ -373,9 +379,12 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBa
         <LibrarySearchOverlay onClose={() => setShowLibrarySearch(false)} />
       )}
 
-      {/* ── Deck import modal ──────────────────────────────────────────── */}
+      {/* ── Deck picker modal (load from library) ────────────────────── */}
       {showImportAfterJoin && (
-        <DeckImportModal onClose={() => setShowImportAfterJoin(false)} />
+        <DeckPickerModal
+          source="auto-open-after-join"
+          onClose={() => setShowImportAfterJoin(false)}
+        />
       )}
     </div>
     </CardInspectorProvider>
