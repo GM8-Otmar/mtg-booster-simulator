@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import * as gameService from '../services/gameService';
 import * as storage from '../services/gameStorageService';
 import { io } from '../index';
-import type { ParsedDeck } from '../types/game';
+import type { ImportedDeckPayload, ParsedDeck } from '../types/game';
 
 const router = Router();
 const GAME_ROOM = (id: string) => `game:${id}`;
@@ -53,9 +53,15 @@ router.post('/:gameId/join', async (req: Request, res: Response) => {
 /** POST /api/games/:gameId/import-deck */
 router.post('/:gameId/import-deck', async (req: Request, res: Response) => {
   try {
-    const { playerId, deck }: { playerId: string; deck: ParsedDeck } = req.body;
-    if (!playerId || !deck) return res.status(400).json({ error: 'playerId and deck required' });
-    const room = await gameService.importDeck(req.params.gameId as string, playerId, deck);
+    const { playerId, deck }: { playerId: string; deck: ParsedDeck | ImportedDeckPayload } = req.body;
+    if (!playerId || deck == null || typeof deck !== 'object') return res.status(400).json({ error: 'playerId and deck required' });
+    const deckPayload = {
+      ...deck,
+      mainboard: Array.isArray(deck.mainboard) ? deck.mainboard : [],
+      sideboard: Array.isArray(deck.sideboard) ? deck.sideboard : [],
+    } as ParsedDeck | ImportedDeckPayload;
+
+    const room = await gameService.importDeck(req.params.gameId as string, playerId, deckPayload);
     const joiningPlayer = room.players[playerId]!;
     const joiningCards: Record<string, (typeof room.cards)[string]> = {};
     for (const [cid, card] of Object.entries(room.cards)) {

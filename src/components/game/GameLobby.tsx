@@ -1,27 +1,25 @@
 import { useState, useCallback } from 'react';
 import { useGameTable } from '../../contexts/GameTableContext';
-import { createSandboxGame } from '../../utils/sandboxGame';
+import type { DeckRecord } from '../../types/deck';
+import { deckRecordToSandboxImportPayload } from '../../utils/deckArena';
+import { createSandboxGame, createSandboxGameFromDeck } from '../../utils/sandboxGame';
 
 interface GameLobbyProps {
   onEnterTable: (isSandbox?: boolean) => void;
+  pendingDeck?: DeckRecord | null;
+  onBack?: () => void;
 }
 
 type LobbyTab = 'create' | 'join';
 
-export default function GameLobby({ onEnterTable }: GameLobbyProps) {
+export default function GameLobby({ onEnterTable, pendingDeck, onBack }: GameLobbyProps) {
   const { createGame, joinGame, loadSandbox, loading, error } = useGameTable();
   const [tab, setTab] = useState<LobbyTab>('create');
-
-  // Create fields
   const [createName, setCreateName] = useState('');
   const [format, setFormat] = useState<'commander' | 'limited' | 'free'>('commander');
   const [roomCode, setRoomCode] = useState('');
-
-  // Join fields
   const [joinCode, setJoinCode] = useState('');
   const [joinName, setJoinName] = useState('');
-
-  // Sandbox fields
   const [sandboxName, setSandboxName] = useState('You');
   const [sandboxPlayers, setSandboxPlayers] = useState<1 | 2 | 3 | 4>(1);
   const [copied, setCopied] = useState(false);
@@ -39,7 +37,7 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
       setRoomCode(code);
       onEnterTable();
     } catch {
-      // error set in context
+      // Error set in context.
     }
   };
 
@@ -49,7 +47,7 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
       await joinGame(joinCode.trim().toUpperCase(), joinName.trim());
       onEnterTable();
     } catch {
-      // error set in context
+      // Error set in context.
     }
   };
 
@@ -59,36 +57,50 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
       playerName: sandboxName.trim() || 'You',
     });
     loadSandbox(room, playerId, sandboxName.trim() || 'You');
-    onEnterTable(true); // isSandbox = true
+    onEnterTable(true);
+  };
+
+  const handleSandboxFromDeck = async () => {
+    if (!pendingDeck) return;
+    const sandboxDeck = await deckRecordToSandboxImportPayload(pendingDeck);
+    const { room, playerId } = createSandboxGameFromDeck(
+      sandboxDeck,
+      { playerName: sandboxName.trim() || 'You' },
+    );
+    loadSandbox(room, playerId, sandboxName.trim() || 'You');
+    onEnterTable(true);
   };
 
   return (
     <div className="min-h-screen bg-navy text-cream flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="mb-4 px-4 py-2 bg-magenta/20 hover:bg-magenta/30 rounded-lg transition-colors text-magenta border border-magenta/40 text-sm"
+          >
+            ← Back
+          </button>
+        )}
         <h1 className="text-4xl font-bold text-center mb-2 text-cream">Game Table</h1>
         <p className="text-center text-cream-muted mb-8 text-sm">
-          Play with friends — import any deck, any format
+          Play with friends - import any deck, any format
         </p>
 
-        {/* Tabs */}
         <div className="flex gap-2 mb-6 bg-navy-light rounded-xl p-1">
-          {(['create', 'join'] as LobbyTab[]).map(t => (
+          {(['create', 'join'] as LobbyTab[]).map(tabName => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={tabName}
+              onClick={() => setTab(tabName)}
               className={`flex-1 py-2 rounded-lg font-semibold text-sm transition-all capitalize ${
-                tab === t
-                  ? 'bg-cyan text-navy'
-                  : 'text-cream-muted hover:text-cream'
+                tab === tabName ? 'bg-cyan text-navy' : 'text-cream-muted hover:text-cream'
               }`}
             >
-              {t === 'create' ? 'Host a Game' : 'Join a Game'}
+              {tabName === 'create' ? 'Host a Game' : 'Join a Game'}
             </button>
           ))}
         </div>
 
-        {/* Create */}
         {tab === 'create' && (
           <div className="bg-navy-light rounded-xl p-6 border border-cyan-dim space-y-4">
             <div>
@@ -96,8 +108,8 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
               <input
                 type="text"
                 value={createName}
-                onChange={e => setCreateName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                onChange={event => setCreateName(event.target.value)}
+                onKeyDown={event => event.key === 'Enter' && handleCreate()}
                 placeholder="e.g. Alex"
                 className="w-full bg-navy border border-cyan-dim rounded-lg px-3 py-2 text-cream placeholder-cream-muted/50 focus:outline-none focus:border-cyan"
               />
@@ -107,7 +119,7 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
               <label className="block text-sm text-cream-muted mb-1">Format</label>
               <select
                 value={format}
-                onChange={e => setFormat(e.target.value as any)}
+                onChange={event => setFormat(event.target.value as 'commander' | 'limited' | 'free')}
                 className="w-full bg-navy border border-cyan-dim rounded-lg px-3 py-2 text-cream focus:outline-none focus:border-cyan"
               >
                 <option value="commander">Commander (40 life)</option>
@@ -116,21 +128,19 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
               </select>
             </div>
 
-            {error && (
-              <p className="text-red-400 text-sm">{error}</p>
-            )}
+            {error && <p className="text-red-400 text-sm">{error}</p>}
 
             <button
               onClick={handleCreate}
               disabled={loading || !createName.trim()}
               className="w-full py-3 bg-cyan hover:bg-cyan/90 rounded-xl font-bold text-navy disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {loading ? 'Creating…' : 'Create Game'}
+              {loading ? 'Creating...' : 'Create Game'}
             </button>
 
             {roomCode && (
               <div className="text-center">
-                <p className="text-cream-muted text-xs mb-1">Room code — share with friends:</p>
+                <p className="text-cream-muted text-xs mb-1">Room code - share with friends:</p>
                 <button
                   onClick={() => copyCode(roomCode)}
                   className="text-3xl font-mono font-bold tracking-widest text-cyan hover:text-cyan/80 transition-colors cursor-pointer select-all"
@@ -138,13 +148,12 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
                 >
                   {roomCode}
                 </button>
-                <p className="text-xs text-cream-muted mt-1">{copied ? '✓ Copied!' : 'Click to copy'}</p>
+                <p className="text-xs text-cream-muted mt-1">{copied ? 'Copied!' : 'Click to copy'}</p>
               </div>
             )}
           </div>
         )}
 
-        {/* Join */}
         {tab === 'join' && (
           <div className="bg-navy-light rounded-xl p-6 border border-magenta/40 space-y-4">
             <div>
@@ -152,7 +161,7 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
               <input
                 type="text"
                 value={joinCode}
-                onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                onChange={event => setJoinCode(event.target.value.toUpperCase())}
                 placeholder="e.g. AB12CD"
                 maxLength={8}
                 className="w-full bg-navy border border-cyan-dim rounded-lg px-3 py-2 text-cream placeholder-cream-muted/50 font-mono tracking-widest uppercase focus:outline-none focus:border-magenta"
@@ -164,37 +173,33 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
               <input
                 type="text"
                 value={joinName}
-                onChange={e => setJoinName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleJoin()}
+                onChange={event => setJoinName(event.target.value)}
+                onKeyDown={event => event.key === 'Enter' && handleJoin()}
                 placeholder="e.g. Jordan"
                 className="w-full bg-navy border border-cyan-dim rounded-lg px-3 py-2 text-cream placeholder-cream-muted/50 focus:outline-none focus:border-magenta"
               />
             </div>
 
-            {error && (
-              <p className="text-red-400 text-sm">{error}</p>
-            )}
+            {error && <p className="text-red-400 text-sm">{error}</p>}
 
             <button
               onClick={handleJoin}
               disabled={loading || !joinCode.trim() || !joinName.trim()}
               className="w-full py-3 bg-magenta hover:bg-magenta/90 rounded-xl font-bold text-cream disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {loading ? 'Joining…' : 'Join Game'}
+              {loading ? 'Joining...' : 'Join Game'}
             </button>
           </div>
         )}
 
-        {/* ── Sandbox / Debug section ─────────────────────────────────── */}
         <div className="mt-6 bg-navy-light/50 rounded-xl border border-dashed border-yellow-600/40 p-4">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-yellow-400 text-sm">🧪</span>
             <span className="text-yellow-400 font-semibold text-sm">Sandbox Mode</span>
             <span className="text-cream-muted text-xs ml-auto">No server needed</span>
           </div>
 
           <p className="text-cream-muted text-xs mb-3">
-            Test the table UI instantly with a pre-built deck — all actions run locally.
+            Test the table UI instantly with local state only.
           </p>
 
           <div className="flex gap-2 mb-3">
@@ -203,7 +208,7 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
               <input
                 type="text"
                 value={sandboxName}
-                onChange={e => setSandboxName(e.target.value)}
+                onChange={event => setSandboxName(event.target.value)}
                 className="w-full bg-navy border border-yellow-600/30 rounded-lg px-2 py-1.5 text-cream text-sm placeholder-cream-muted/40 focus:outline-none focus:border-yellow-500"
               />
             </div>
@@ -211,7 +216,7 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
               <label className="block text-xs text-cream-muted mb-1">Players</label>
               <select
                 value={sandboxPlayers}
-                onChange={e => setSandboxPlayers(Number(e.target.value) as 1 | 2 | 3 | 4)}
+                onChange={event => setSandboxPlayers(Number(event.target.value) as 1 | 2 | 3 | 4)}
                 className="h-[34px] bg-navy border border-yellow-600/30 rounded-lg px-2 text-cream text-sm focus:outline-none focus:border-yellow-500"
               >
                 <option value={1}>1 (solo)</option>
@@ -226,10 +231,18 @@ export default function GameLobby({ onEnterTable }: GameLobbyProps) {
             onClick={handleSandbox}
             className="w-full py-2.5 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/50 rounded-xl font-bold text-yellow-400 text-sm transition-all"
           >
-            🧪 Launch Sandbox
+            Launch Sandbox
           </button>
-        </div>
 
+          {pendingDeck && (
+            <button
+              onClick={handleSandboxFromDeck}
+              className="w-full mt-3 py-2.5 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 rounded-xl font-bold text-green-300 text-sm transition-all"
+            >
+              Play Loaded Deck In Sandbox
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

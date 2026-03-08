@@ -7,17 +7,25 @@ import PlayerBanner from '../components/game/PlayerBanner';
 import OpponentView from '../components/game/OpponentView';
 import GameControls from '../components/game/GameControls';
 import ScryOverlay from '../components/game/ScryOverlay';
-import DeckImportModal from '../components/game/DeckImportModal';
+import DeckPickerModal from '../components/game/DeckPickerModal';
 import ZoneCountHUD from '../components/game/ZoneCountHUD';
 import BottomBar from '../components/game/BottomBar';
 import CardHoverInspector from '../components/game/CardHoverInspector';
 import LibrarySearchOverlay from '../components/game/LibrarySearchOverlay';
 import TargetingOverlay from '../components/game/TargetingOverlay';
 import OpponentInfoPanel from '../components/game/OpponentInfoPanel';
+import type { DeckRecord } from '../types/deck';
 import type { BattlefieldCard } from '../types/game';
+import { deckRecordToSandboxImportPayload } from '../utils/deckArena';
 import { CardInspectorProvider } from '../components/game/CardInspectorPanel';
 
-export default function GameTablePage() {
+interface GameTablePageProps {
+  pendingDeck?: DeckRecord | null;
+  onPendingDeckConsumed?: () => void;
+  onBack?: () => void;
+}
+
+export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBack }: GameTablePageProps) {
   const {
     room, playerId, leaveGame,
     myPlayer, myHandCards, myBattlefieldCards,
@@ -27,12 +35,14 @@ export default function GameTablePage() {
     concede, connected, gameRoomId, isSandbox,
     activeSandboxPlayerId, setActiveSandboxPlayer,
     passTurn, isMyTurn,
+    importDeck,
   } = useGameTable();
 
   const [atTable, setAtTable] = useState(false);
   const [showImportAfterJoin, setShowImportAfterJoin] = useState(false);
   const [showLibrarySearch, setShowLibrarySearch] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [pendingDeckImported, setPendingDeckImported] = useState(false);
 
   const copyRoomCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -94,12 +104,48 @@ export default function GameTablePage() {
     prevIsMyTurnRef.current = isMyTurn;
   }, [isMyTurn, atTable]);
 
+  useEffect(() => {
+    if (!pendingDeck) {
+      setPendingDeckImported(false);
+      return;
+    }
+
+    if (!atTable || !room || !playerId || isSandbox || pendingDeckImported) {
+      return;
+    }
+
+    let cancelled = false;
+
+    // Resolve all card printings client-side before sending to server
+    // so the server never needs to call Scryfall.
+    deckRecordToSandboxImportPayload(pendingDeck)
+      .then(payload => {
+        if (cancelled) return;
+        return importDeck(payload);
+      })
+      .then(() => {
+        if (cancelled) return;
+        setPendingDeckImported(true);
+        onPendingDeckConsumed?.();
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPendingDeckImported(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [atTable, importDeck, isSandbox, onPendingDeckConsumed, pendingDeck, pendingDeckImported, playerId, room]);
+
   if (!room || !atTable) {
     return (
       <GameLobby
+        pendingDeck={pendingDeck}
+        onBack={onBack}
         onEnterTable={(sandbox) => {
           setAtTable(true);
-          setShowImportAfterJoin(!sandbox);
+          setShowImportAfterJoin(!sandbox && !pendingDeck);
         }}
       />
     );
@@ -131,9 +177,9 @@ export default function GameTablePage() {
         <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => { leaveGame(); setAtTable(false); }}
-            className="text-cream-muted hover:text-cream text-sm px-2 py-1 rounded border border-cyan-dim hover:border-cyan transition-all"
+            className="text-magenta text-sm px-3 py-1.5 rounded-lg bg-magenta/20 hover:bg-magenta/30 border border-magenta/40 transition-all"
           >
-            &larr; Leave
+            ← Leave
           </button>
           <span className="text-cream font-bold">🃏 Game Table</span>
           {isSandbox ? (
@@ -333,9 +379,12 @@ export default function GameTablePage() {
         <LibrarySearchOverlay onClose={() => setShowLibrarySearch(false)} />
       )}
 
-      {/* ── Deck import modal ──────────────────────────────────────────── */}
+      {/* ── Deck picker modal (load from library) ────────────────────── */}
       {showImportAfterJoin && (
-        <DeckImportModal onClose={() => setShowImportAfterJoin(false)} />
+        <DeckPickerModal
+          source="auto-open-after-join"
+          onClose={() => setShowImportAfterJoin(false)}
+        />
       )}
     </div>
     </CardInspectorProvider>

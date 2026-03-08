@@ -1,0 +1,55 @@
+import axios from 'axios';
+import type { ScryfallCard } from '../types/card';
+
+const SCRYFALL_API = 'https://api.scryfall.com';
+
+type SearchResponse = {
+  data: ScryfallCard[];
+};
+
+const client = axios.create({
+  baseURL: SCRYFALL_API,
+});
+
+export async function searchDeckCards(query: string): Promise<ScryfallCard[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  try {
+    const response = await client.get<SearchResponse>('/cards/search', {
+      params: {
+        q: `${trimmed} game:paper`,
+        unique: 'cards',
+        order: 'name',
+      },
+    });
+
+    return response.data.data ?? [];
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) {
+      return [];
+    }
+    throw err;
+  }
+}
+
+export async function searchCardPrintings(cardName: string): Promise<ScryfallCard[]> {
+  const trimmed = cardName.trim();
+  if (!trimmed) return [];
+
+  const response = await client.get<SearchResponse>('/cards/search', {
+    params: {
+      q: `!"${trimmed}" game:paper`,
+      unique: 'prints',
+      order: 'released',
+      dir: 'desc',
+    },
+  });
+
+  return response.data.data ?? [];
+}
+
+export async function getLatestCardPrinting(cardName: string): Promise<ScryfallCard | null> {
+  const results = await searchCardPrintings(cardName);
+  return results[0] ?? null;
+}

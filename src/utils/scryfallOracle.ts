@@ -11,6 +11,8 @@ export interface OracleData {
   power?: string;
   toughness?: string;
   loyalty?: string;
+  cmc?: number;
+  colors?: string[];
 }
 
 // Keyed by exact card name
@@ -35,6 +37,8 @@ export async function fetchOracle(name: string): Promise<OracleData | null> {
       power: card.power,
       toughness: card.toughness,
       loyalty: card.loyalty,
+      cmc: typeof card.cmc === 'number' ? card.cmc : undefined,
+      colors: Array.isArray(card.colors) ? card.colors : undefined,
     };
     cache.set(name, oracle);
     return oracle;
@@ -81,6 +85,8 @@ export async function prefetchOracles(names: string[]): Promise<void> {
               power: card.power as string | undefined,
               toughness: card.toughness as string | undefined,
               loyalty: card.loyalty as string | undefined,
+              cmc: typeof card.cmc === 'number' ? (card.cmc as number) : undefined,
+              colors: Array.isArray(card.colors) ? (card.colors as string[]) : undefined,
             });
           }
         }
@@ -98,4 +104,21 @@ export async function prefetchOracles(names: string[]): Promise<void> {
   }
 
   await Promise.all(promises);
+}
+
+/** Parse CMC from a mana cost string like "{2}{U}{B}" → 4. Fallback when cmc field is missing. */
+export function parseCmcFromManaCost(manaCost: string): number {
+  if (!manaCost) return 0;
+  let total = 0;
+  const symbols = manaCost.match(/\{([^}]+)\}/g) ?? [];
+  for (const sym of symbols) {
+    const inner = sym.slice(1, -1);
+    const num = parseInt(inner, 10);
+    if (!isNaN(num)) {
+      total += num;
+    } else if (inner !== 'X') {
+      total += 1; // colored pip = 1
+    }
+  }
+  return total;
 }
