@@ -48,6 +48,9 @@ export interface GameTableContextType {
   myExileCards: BattlefieldCard[];
   myCommandZoneCards: BattlefieldCard[];
 
+  // recovery
+  requestGameState: () => void;
+
   // lobby actions
   createGame: (playerName: string, format?: string) => Promise<string>; // returns code
   joinGame: (code: string, playerName: string) => Promise<void>;
@@ -73,6 +76,8 @@ export interface GameTableContextType {
   untapAll: () => void;
   setFaceDown: (instanceId: string, faceDown: boolean) => void;
   transformCard: (instanceId: string) => void;
+  attachCard: (instanceId: string, targetId: string) => void;
+  detachCard: (instanceId: string) => void;
   addCounter: (instanceId: string, counterType: string, delta: number, label?: string) => void;
   /** Apply a counter change to multiple cards at once (avoids batching issues) */
   bulkAddCounter: (instanceIds: string[], counterType: string, delta: number, label?: string) => void;
@@ -113,6 +118,11 @@ export interface GameTableContextType {
   dismissArrow: (arrowId: string) => void;
   clearAllArrows: () => void;
 
+  // attaching mode (client-only — reuses targeting UI)
+  isAttachingMode: boolean;
+  startAttaching: (sourceInstanceId: string) => void;
+  cancelAttaching: () => void;
+
   // social
   concede: () => void;
   sendMessage: (text: string) => void;
@@ -130,11 +140,38 @@ const SOCKET_URL = import.meta.env.VITE_API_URL || window.location.origin;
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
+// ── Session persistence — survive page refresh / disconnect ────────────────
+const SESSION_KEY = 'mtg-game-session';
+
+interface PersistedSession {
+  playerId: string;
+  playerName: string;
+  gameRoomId: string;
+}
+
+function saveSession(session: PersistedSession | null): void {
+  try {
+    if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(SESSION_KEY);
+  } catch { /* private browsing may block sessionStorage */ }
+}
+
+function loadSession(): PersistedSession | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (s?.playerId && s?.gameRoomId && s?.playerName) return s as PersistedSession;
+  } catch { /* */ }
+  return null;
+}
+
 export function GameTableProvider({ children }: { children: React.ReactNode }) {
+  const savedSession = loadSession();
   const [room, setRoom] = useState<GameRoom | null>(null);
-  const [playerId, setPlayerId] = useState<string | null>(null);
-  const [playerName, setPlayerName] = useState<string | null>(null);
-  const [gameRoomId, setGameRoomId] = useState<string | null>(null);
+  const [playerId, setPlayerId] = useState<string | null>(savedSession?.playerId ?? null);
+  const [playerName, setPlayerName] = useState<string | null>(savedSession?.playerName ?? null);
+  const [gameRoomId, setGameRoomId] = useState<string | null>(savedSession?.gameRoomId ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
@@ -149,6 +186,9 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   const [targetingArrows, setTargetingArrows] = useState<Array<{ id: string; fromId: string; toId: string; createdAt: number }>>([]);
   const [targetingSource, setTargetingSource] = useState<string | null>(null);
 
+  // attaching mode (client-only — reuses targeting visual)
+  const [attachingSource, setAttachingSource] = useState<string | null>(null);
+
   // shaking cards (visual-only, temporary)
   const [shakingCardIds, setShakingCardIds] = useState<Set<string>>(new Set());
 
@@ -157,6 +197,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   const gameRoomIdRef = useRef<string | null>(null);
   const roomRef = useRef<GameRoom | null>(null);
   const pendingLifeLogRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; startLife: number } | null>(null);
+  const pendingMultiplayerLifeRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; accDelta: number } | null>(null);
   const pendingCounterLogRef = useRef<Record<string, { timer: ReturnType<typeof setTimeout> | null; startTotal: number; cardName: string }>>({});
   const isSandboxRef = useRef(false);
   const activeSandboxPlayerIdRef = useRef<string | null>(null);
@@ -167,6 +208,15 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { roomRef.current = room; }, [room]);
   useEffect(() => { isSandboxRef.current = isSandbox; }, [isSandbox]);
   useEffect(() => { activeSandboxPlayerIdRef.current = activeSandboxPlayerId; }, [activeSandboxPlayerId]);
+
+  // Persist session to sessionStorage so page refresh / disconnect can recover
+  useEffect(() => {
+    if (playerId && gameRoomId && playerName && !isSandbox) {
+      saveSession({ playerId, gameRoomId, playerName });
+    } else if (!playerId || !gameRoomId) {
+      saveSession(null);
+    }
+  }, [playerId, gameRoomId, playerName, isSandbox]);
 
   // ── Socket setup ──────────────────────────────────────────────────────────
 
@@ -518,6 +568,41 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     if (!socketRef.current) return;
+
+    // ── Multiplayer life changes: optimistic local update + debounced emit ──
+    if (event === 'player:life') {
+      const delta = (payload as any).delta as number;
+      // Apply optimistic local update immediately
+      setRoom(prev => {
+        if (!prev || !prev.players[pid]) return prev;
+        const player = prev.players[pid]!;
+        return {
+          ...prev,
+          players: { ...prev.players, [pid]: { ...player, life: player.life + delta } },
+        };
+      });
+      // Accumulate delta and debounce the server emit
+      if (!pendingMultiplayerLifeRef.current) {
+        pendingMultiplayerLifeRef.current = { timer: null, accDelta: 0 };
+      }
+      pendingMultiplayerLifeRef.current.accDelta += delta;
+      if (pendingMultiplayerLifeRef.current.timer) {
+        clearTimeout(pendingMultiplayerLifeRef.current.timer);
+      }
+      pendingMultiplayerLifeRef.current.timer = setTimeout(() => {
+        const pending = pendingMultiplayerLifeRef.current;
+        if (!pending || pending.accDelta === 0) { pendingMultiplayerLifeRef.current = null; return; }
+        const sock = socketRef.current;
+        const currentPid = playerIdRef.current;
+        const currentRoomId = gameRoomIdRef.current;
+        if (sock && currentPid && currentRoomId) {
+          sock.emit('player:life', { gameRoomId: currentRoomId, playerId: currentPid, delta: pending.accDelta });
+        }
+        pendingMultiplayerLifeRef.current = null;
+      }, 1500);
+      return;
+    }
+
     socketRef.current.emit(event, { gameRoomId: roomId, playerId: pid, ...payload });
   }, []);
 
@@ -646,6 +731,14 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('card:transform', { instanceId });
   }, [emit]);
 
+  const attachCard = useCallback((instanceId: string, targetId: string) => {
+    emit('card:attach', { instanceId, targetId });
+  }, [emit]);
+
+  const detachCard = useCallback((instanceId: string) => {
+    emit('card:detach', { instanceId });
+  }, [emit]);
+
   const addCounter = useCallback((instanceId: string, counterType: string, delta: number, label?: string) => {
     saveUndoSnapshot();
     emit('card:counter', { instanceId, counterType, delta, label });
@@ -716,6 +809,21 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
   const shakeCards = useCallback((instanceIds: string[]) => {
     emit('card:shake', { instanceIds });
   }, [emit]);
+
+  // ── State recovery ──────────────────────────────────────────────────────
+
+  const requestGameState = useCallback(() => {
+    const sock = socketRef.current;
+    const pid = playerIdRef.current;
+    const roomId = gameRoomIdRef.current;
+    if (!sock || !pid || !roomId) {
+      console.warn('[MTG] requestGameState — missing socket/pid/roomId, cannot sync');
+      return;
+    }
+    console.log('[MTG] requesting full game state refresh — re-joining room first');
+    // Re-join the socket room in case we got disconnected, then request fresh state
+    sock.emit('game:join', { gameRoomId: roomId, playerId: pid });
+  }, []);
 
   // ── Player actions ────────────────────────────────────────────────────────
 
@@ -864,7 +972,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
 
   // ── Targeting arrows (client-only) ────────────────────────────────────────
 
-  const isTargetingMode = targetingSource !== null;
+  const isTargetingMode = targetingSource !== null || attachingSource !== null;
 
   const startTargeting = useCallback((sourceInstanceId: string) => {
     setTargetingSource(sourceInstanceId);
@@ -872,9 +980,30 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
 
   const cancelTargeting = useCallback(() => {
     setTargetingSource(null);
+    setAttachingSource(null);
+  }, []);
+
+  // ── Attaching ──────────────────────────────────────────────────────────────
+
+  const isAttachingMode = attachingSource !== null;
+
+  const startAttaching = useCallback((sourceInstanceId: string) => {
+    setAttachingSource(sourceInstanceId);
+  }, []);
+
+  const cancelAttaching = useCallback(() => {
+    setAttachingSource(null);
   }, []);
 
   const completeTargeting = useCallback((targetId: string) => {
+    // If in attach mode, attach the card instead of creating a targeting arrow
+    if (attachingSource) {
+      const source = attachingSource;
+      setAttachingSource(null);
+      attachCard(source, targetId);
+      return;
+    }
+
     const source = targetingSource;
     if (!source) return;
     setTargetingSource(null);
@@ -910,7 +1039,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     emit('card:target', { sourceInstanceId: source, targetId });
-  }, [targetingSource, emit]);
+  }, [targetingSource, attachingSource, attachCard, emit]);
 
   useEffect(() => {
     const sock = socketRef.current;
@@ -994,14 +1123,16 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       canUndo, undo,
       myPlayer, myHandCards, myBattlefieldCards, myLibraryCount,
       myGraveyardCards, myExileCards, myCommandZoneCards,
+      requestGameState,
       createGame, joinGame, importDeck, importCommander, leaveGame, loadSandbox, isSandbox,
       activeSandboxPlayerId, setActiveSandboxPlayer,
-      moveCard, changeZone, reorderHand, bulkChangeZone, tapCard, bulkTapCards, tapAll, untapAll, setFaceDown, transformCard, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
+      moveCard, changeZone, reorderHand, bulkChangeZone, tapCard, bulkTapCards, tapAll, untapAll, setFaceDown, transformCard, attachCard, detachCard, addCounter, bulkAddCounter, resetCounters, revealCards, shakeCards, shakingCardIds,
       adjustLife, setLife, adjustPoison, dealCommanderDamage, notifyCommanderCast, setCommanderTax,
       drawCards, shuffleLibrary, scry, resolveScry, mulligan,
       createToken,
       passTurn, activePlayerId, isMyTurn,
       targetingArrows, isTargetingMode, startTargeting, cancelTargeting, completeTargeting, dismissArrow, clearAllArrows,
+      isAttachingMode, startAttaching, cancelAttaching,
       concede, sendMessage,
       rollDice,
       flipCoin,
@@ -1125,6 +1256,22 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
 
     case 'card:transform':
       return applyDelta(room, { type: 'card_transform', instanceId: payload.instanceId, flipped: payload.flipped }, myPlayerId);
+
+    case 'card:attach': {
+      const target = room.cards[payload.targetId];
+      if (!target) return room;
+      const existingAttachments = Object.values(room.cards).filter(c => c.attachedTo === payload.targetId && c.zone === 'battlefield').length;
+      return applyDelta(room, {
+        type: 'card_attached',
+        instanceId: payload.instanceId,
+        targetId: payload.targetId,
+        x: target.x,
+        y: Math.max(2, target.y - 6 * (existingAttachments + 1)),
+      }, myPlayerId);
+    }
+
+    case 'card:detach':
+      return applyDelta(room, { type: 'card_detached', instanceId: payload.instanceId }, myPlayerId);
 
     case 'card:counter': {
       const card = room.cards[payload.instanceId];

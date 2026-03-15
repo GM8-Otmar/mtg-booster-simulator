@@ -263,6 +263,16 @@ export function setTags(deck: DeckRecord, tags: string[]): DeckRecord {
   return touchUpdatedAt({ ...deck, tags: [...tags] });
 }
 
+export function setDeckTag(deck: DeckRecord, tag: string | null): DeckRecord {
+  return touchUpdatedAt({
+    ...deck,
+    preferences: {
+      ...deck.preferences,
+      tag: tag || null,
+    },
+  });
+}
+
 export function setDeckIcon(deck: DeckRecord, icon: string | null): DeckRecord {
   return touchUpdatedAt({
     ...deck,
@@ -311,6 +321,7 @@ export function getDeckSummary(deck: DeckRecord): DeckSummary {
     commanderNames: deck.commander.map(e => e.cardName),
     coverImageUri: deck.commander[0]?.preferredPrinting?.imageUri ?? null,
     icon: deck.preferences.icon ?? null,
+    tag: deck.preferences.tag ?? null,
     updatedAt: deck.updatedAt,
     lastPlayedAt: deck.lastPlayedAt,
   };

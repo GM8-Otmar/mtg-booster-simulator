@@ -2,18 +2,25 @@ import { useState, useEffect, useRef } from 'react';
 import { Heart } from 'lucide-react';
 import type { GamePlayerState } from '../../types/game';
 import { useGameTable } from '../../contexts/GameTableContext';
+import { useCardInspector } from './CardInspectorPanel';
 import OpponentZoneInspectModal from './OpponentZoneInspectModal';
 
 interface OpponentStripProps {
   player: GamePlayerState;
 }
 
-/** Minimal strip for opponents: name (right-click for GY/exile inspect), life, poison. Tooltip shows hand/lib/gy/exile counts. */
+/** Minimal strip for opponents: name (right-click for GY/exile/command inspect), life, poison, commanders. */
 export default function OpponentStrip({ player }: OpponentStripProps) {
-  const { isTargetingMode, completeTargeting } = useGameTable();
+  const { room, isTargetingMode, completeTargeting } = useGameTable();
+  const { hoverInspect, clearHoverInspect } = useCardInspector();
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
-  const [inspectZone, setInspectZone] = useState<'graveyard' | 'exile' | null>(null);
+  const [inspectZone, setInspectZone] = useState<'graveyard' | 'exile' | 'command_zone' | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Get commander cards for this opponent
+  const commandZoneCards = room
+    ? (player.commandZoneCardIds ?? []).map(id => room.cards[id]).filter(Boolean)
+    : [];
 
   const tooltip = `Hand: ${player.handCardIds?.length ?? 0}  Library: ${player.libraryCardIds?.length ?? 0}  GY: ${player.graveyardCardIds?.length ?? 0}  Exile: ${player.exileCardIds?.length ?? 0}`;
 
@@ -48,6 +55,30 @@ export default function OpponentStrip({ player }: OpponentStripProps) {
         >
           {player.playerName}
         </span>
+
+        {/* Commander thumbnails */}
+        {commandZoneCards.length > 0 && (
+          <div className="flex items-center gap-1">
+            {commandZoneCards.map(card => card && (
+              <div
+                key={card.instanceId}
+                className="w-6 h-8 rounded border border-magenta/50 overflow-hidden flex-shrink-0 cursor-help"
+                title={card.name}
+                onMouseEnter={() => hoverInspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId })}
+                onMouseLeave={clearHoverInspect}
+              >
+                {card.imageUri ? (
+                  <img src={card.imageUri} alt={card.name} className="w-full h-full object-cover" draggable={false} />
+                ) : (
+                  <div className="w-full h-full bg-navy-light flex items-center justify-center text-[5px] text-magenta text-center p-0.5">
+                    {card.name}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         <span className="text-xs text-cream-muted ml-auto flex items-center gap-2">
           <span title="Life" className="flex items-center gap-1">
             <Heart className="w-3 h-3 text-red-400 fill-red-400" /> <span className="font-bold text-cream">{player.life}</span>
@@ -88,6 +119,15 @@ export default function OpponentStrip({ player }: OpponentStripProps) {
             }}
           >
             Inspect Exile ({player.exileCardIds?.length ?? 0})
+          </button>
+          <button
+            className="w-full text-left px-3 py-2 text-sm text-cream hover:bg-navy-light transition-colors"
+            onClick={() => {
+              setInspectZone('command_zone');
+              setMenuPos(null);
+            }}
+          >
+            Inspect Command Zone ({player.commandZoneCardIds?.length ?? 0})
           </button>
         </div>
       )}

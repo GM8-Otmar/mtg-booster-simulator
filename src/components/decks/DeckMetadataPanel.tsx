@@ -6,12 +6,14 @@ interface DeckMetadataPanelProps {
   format: DeckFormat;
   notes: string;
   icon: string | null | undefined;
+  tag: string | null | undefined;
   commanderName: string | null;
   commanderImageUri?: string | null;
   onNameChange: (value: string) => void;
   onFormatChange: (value: DeckFormat) => void;
   onNotesChange: (value: string) => void;
   onIconChange: (value: string | null) => void;
+  onTagChange: (value: string | null) => void;
 }
 
 export default function DeckMetadataPanel({
@@ -19,12 +21,14 @@ export default function DeckMetadataPanel({
   format,
   notes,
   icon,
+  tag,
   commanderName,
   commanderImageUri,
   onNameChange,
   onFormatChange,
   onNotesChange,
   onIconChange,
+  onTagChange,
 }: DeckMetadataPanelProps) {
   const CoverIcon = getDeckIcon(icon);
 
@@ -84,6 +88,19 @@ export default function DeckMetadataPanel({
             </button>
           </div>
         </div>
+      </div>
+
+      <div>
+        <label className="block text-xs uppercase tracking-wide text-cream-muted mb-1">Deck Tag</label>
+        <input
+          type="text"
+          value={tag ?? ''}
+          onChange={event => onTagChange(event.target.value || null)}
+          maxLength={12}
+          placeholder="e.g. Aggro, Combo, Jank…"
+          className="w-full bg-navy border border-cyan-dim rounded-lg px-3 py-2 text-cream text-sm focus:outline-none focus:border-cyan"
+        />
+        <p className="text-[11px] text-cream-muted mt-1">Shown alongside the icon on the deck card.</p>
       </div>
 
       <div>

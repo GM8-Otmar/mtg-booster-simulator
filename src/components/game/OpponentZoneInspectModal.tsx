@@ -4,16 +4,20 @@ import { useCardInspector } from './CardInspectorPanel';
 
 interface OpponentZoneInspectModalProps {
   player: GamePlayerState;
-  zone: 'graveyard' | 'exile';
+  zone: 'graveyard' | 'exile' | 'command_zone';
   onClose: () => void;
 }
 
 export default function OpponentZoneInspectModal({ player, zone, onClose }: OpponentZoneInspectModalProps) {
   const { room } = useGameTable();
   const { inspect, hoverInspect, clearHoverInspect } = useCardInspector();
-  const ids = zone === 'graveyard' ? player.graveyardCardIds : player.exileCardIds;
+  const ids = zone === 'graveyard'
+    ? player.graveyardCardIds
+    : zone === 'exile'
+    ? player.exileCardIds
+    : player.commandZoneCardIds ?? [];
   const cards = ids.map(id => room?.cards[id]).filter(Boolean) as BattlefieldCard[];
-  const label = zone === 'graveyard' ? 'Graveyard' : 'Exile';
+  const label = zone === 'graveyard' ? 'Graveyard' : zone === 'exile' ? 'Exile' : 'Command Zone';
 
   return (
     <div

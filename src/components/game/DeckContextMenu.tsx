@@ -12,13 +12,15 @@ interface DeckContextMenuProps {
   onDraw: () => void;
   onFind: () => void;
   onScry: (count: number, mode: 'scry' | 'surveil') => void;
+  onMill: (count: number, zone: 'graveyard' | 'exile') => void;
   libraryCount: number;
 }
 
 export default function DeckContextMenu({
-  x, y, onClose, onShuffle, onDraw, onFind, onScry, libraryCount,
+  x, y, onClose, onShuffle, onDraw, onFind, onScry, onMill, libraryCount,
 }: DeckContextMenuProps) {
   const [scryCount, setScryCount] = useState(1);
+  const [millCount, setMillCount] = useState(1);
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
 
@@ -127,6 +129,47 @@ export default function DeckContextMenu({
             className="flex-1 text-xs py-1 bg-magenta/10 hover:bg-magenta/20 border border-magenta/30 rounded-lg text-magenta/70 disabled:opacity-40 transition-all"
           >
             Surveil {scryCount}
+          </button>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="border-t border-cyan-dim/20 my-1" />
+
+      {/* Mill with counter */}
+      <div className="px-3 py-1.5">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] text-cream-muted uppercase tracking-wider">Mill</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setMillCount(c => Math.max(1, c - 1))}
+              className="w-5 h-5 rounded bg-navy-light border border-cyan-dim/40 text-cream-muted text-xs flex items-center justify-center hover:text-cream transition-colors"
+            >
+              {'\u2212'}
+            </button>
+            <span className="text-xs font-mono font-bold text-cream w-4 text-center">{millCount}</span>
+            <button
+              onClick={() => setMillCount(c => Math.min(libraryCount, c + 1))}
+              className="w-5 h-5 rounded bg-navy-light border border-cyan-dim/40 text-cream-muted text-xs flex items-center justify-center hover:text-cream transition-colors"
+            >
+              +
+            </button>
+          </div>
+        </div>
+        <div className="flex gap-1">
+          <button
+            disabled={disabled}
+            onClick={() => { onMill(millCount, 'graveyard'); onClose(); }}
+            className="flex-1 text-xs py-1 bg-cyan/15 hover:bg-cyan/25 border border-cyan-dim/50 rounded-lg text-cyan disabled:opacity-40 transition-all"
+          >
+            to Graveyard
+          </button>
+          <button
+            disabled={disabled}
+            onClick={() => { onMill(millCount, 'exile'); onClose(); }}
+            className="flex-1 text-xs py-1 bg-magenta/10 hover:bg-magenta/20 border border-magenta/30 rounded-lg text-magenta/70 disabled:opacity-40 transition-all"
+          >
+            to Exile
           </button>
         </div>
       </div>

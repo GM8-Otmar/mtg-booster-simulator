@@ -43,6 +43,7 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBa
   const [showLibrarySearch, setShowLibrarySearch] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
   const [pendingDeckImported, setPendingDeckImported] = useState(false);
+  const pendingImportInFlightRef = useRef(false);
 
   const copyRoomCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -107,14 +108,16 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBa
   useEffect(() => {
     if (!pendingDeck) {
       setPendingDeckImported(false);
+      pendingImportInFlightRef.current = false;
       return;
     }
 
-    if (!atTable || !room || !playerId || isSandbox || pendingDeckImported) {
+    if (!atTable || !playerId || isSandbox || pendingDeckImported || pendingImportInFlightRef.current) {
       return;
     }
 
     let cancelled = false;
+    pendingImportInFlightRef.current = true;
 
     // Resolve all card printings client-side before sending to server
     // so the server never needs to call Scryfall.
@@ -131,12 +134,15 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBa
       .catch(() => {
         if (cancelled) return;
         setPendingDeckImported(false);
+      })
+      .finally(() => {
+        if (!cancelled) pendingImportInFlightRef.current = false;
       });
 
     return () => {
       cancelled = true;
     };
-  }, [atTable, importDeck, isSandbox, onPendingDeckConsumed, pendingDeck, pendingDeckImported, playerId, room]);
+  }, [atTable, importDeck, isSandbox, onPendingDeckConsumed, pendingDeck, pendingDeckImported, playerId]);
 
   if (!room || !atTable) {
     return (

@@ -63,6 +63,18 @@ export function broadcastPlayerJoined(eventId: string, player: any) {
   io.to(eventId).emit('player-joined', player);
 }
 
+// Flush game state to disk on shutdown
+process.on('SIGINT', async () => {
+  console.log('\n[MTG-SERVER] Flushing game state to disk before exit...');
+  await gameStorage.flushAll();
+  process.exit(0);
+});
+process.on('SIGTERM', async () => {
+  console.log('\n[MTG-SERVER] Flushing game state to disk before exit...');
+  await gameStorage.flushAll();
+  process.exit(0);
+});
+
 // Cleanup old events every hour
 setInterval(async () => {
   console.log('Running cleanup of old events...');

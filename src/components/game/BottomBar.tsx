@@ -5,9 +5,10 @@
  * The action log overflows ABOVE the bottom bar so it doesn't bloat the hand zone.
  * A pink collapse/expand button toggles the log visibility.
  */
-import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import type { BattlefieldCard, GamePlayerState, GameAction } from '../../types/game';
+import { useGameTable } from '../../contexts/GameTableContext';
 import GraveyardPile from './GraveyardPile';
 import ExilePile from './ExilePile';
 import CommandZone from './CommandZone';
@@ -39,7 +40,21 @@ export default function BottomBar({
   player,
   actions,
 }: BottomBarProps) {
+  const { requestGameState, isSandbox } = useGameTable();
   const [logOpen, setLogOpen] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const handleRefresh = () => {
+    requestGameState();
+    setToast('Game state refreshed');
+  };
 
   return (
     <div className="shrink-0 border-t border-cyan-dim/30 bg-navy/70 flex items-stretch" style={{ height: 148 }}>
@@ -72,6 +87,30 @@ export default function BottomBar({
           {logOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
           {logOpen ? 'HIDE LOG' : 'SHOW LOG'}
         </button>
+
+        {/* Refresh game state button (multiplayer only) */}
+        {!isSandbox && (
+          <button
+            onClick={handleRefresh}
+            title="Refresh game state (fix desync)"
+            className="absolute z-10 flex items-center gap-1 rounded-tr-lg rounded-bl-lg px-2 py-1
+                       bg-cyan/10 hover:bg-cyan/20 border border-cyan-dim/30 text-cyan-dim hover:text-cyan
+                       transition-all text-[10px] font-bold"
+            style={{ top: logOpen ? -260 : -28, right: 0 }}
+          >
+            <RefreshCw className="w-3 h-3" />
+            SYNC
+          </button>
+        )}
+
+        {/* Toast notification */}
+        {toast && (
+          <div className="absolute z-20 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-green-900/90 border border-green-500/50 rounded-lg text-green-300 text-xs font-bold shadow-lg animate-fade-in"
+            style={{ top: logOpen ? -270 : -40 }}
+          >
+            {toast}
+          </div>
+        )}
 
         {/* Action log — positioned absolutely, extends above the bar */}
         {logOpen && (
