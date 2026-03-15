@@ -39,3 +39,9 @@ dist-server/
 
 # Cloudflare tunnel (optional local binary)
 cloudflared.exe
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
