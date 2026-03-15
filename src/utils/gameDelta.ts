@@ -313,11 +313,37 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
     }
 
     case 'library_shuffled':
-    case 'scry_resolved':
     case 'player_conceded':
     case 'message':
     case 'cards_revealed': {
       return { ...room, actionLog: appendLog(room.actionLog, delta.log) };
+    }
+
+    case 'scry_resolved': {
+      const gyIds: string[] = delta.graveyard ?? [];
+      if (gyIds.length === 0) {
+        return { ...room, actionLog: appendLog(room.actionLog, delta.log) };
+      }
+      // Surveil: move cards to graveyard zone
+      const newCards = { ...room.cards };
+      for (const id of gyIds) {
+        if (newCards[id]) newCards[id] = { ...newCards[id]!, zone: 'graveyard' };
+      }
+      const player = room.players[delta.playerId];
+      if (!player) return { ...room, cards: newCards, actionLog: appendLog(room.actionLog, delta.log) };
+      return {
+        ...room,
+        cards: newCards,
+        players: {
+          ...room.players,
+          [delta.playerId]: {
+            ...player,
+            libraryCardIds: player.libraryCardIds.filter((id: string) => !gyIds.includes(id)),
+            graveyardCardIds: [...player.graveyardCardIds, ...gyIds],
+          },
+        },
+        actionLog: appendLog(room.actionLog, delta.log),
+      };
     }
 
     case 'cards_revealed_state': {

@@ -1254,8 +1254,10 @@ function applyLocalSandboxAction(room: GameRoom, event: string, payload: any, my
     case 'card:facedown':
       return applyDelta(room, { type: 'card_facedown', instanceId: payload.instanceId, faceDown: payload.faceDown }, myPlayerId);
 
-    case 'card:transform':
-      return applyDelta(room, { type: 'card_transform', instanceId: payload.instanceId, flipped: payload.flipped }, myPlayerId);
+    case 'card:transform': {
+      const currentCard = room.cards[payload.instanceId];
+      return applyDelta(room, { type: 'card_transform', instanceId: payload.instanceId, flipped: !(currentCard?.flipped ?? false) }, myPlayerId);
+    }
 
     case 'card:attach': {
       const target = room.cards[payload.targetId];

@@ -236,7 +236,7 @@ export async function importDeck(
   ];
   const resolved = resolvedCards ?? await resolveNames(allEntries);
 
-  // Clear existing cards owned by this player
+  // Clear existing cards owned by this player and reset life
   for (const [id, card] of Object.entries(room.cards)) {
     if (card.controller === playerId) delete room.cards[id];
   }
@@ -246,6 +246,10 @@ export async function importDeck(
   player.exileCardIds = [];
   player.commandZoneCardIds = [];
   player.sideboardCardIds = [];
+  player.life = startingLife(room.format);
+  player.poisonCounters = 0;
+  player.commanderTax = 0;
+  player.commanderDamageReceived = {};
 
   function makeInstance(
     rawName: string | unknown,

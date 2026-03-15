@@ -225,8 +225,9 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     const actor = room.players[playerId];
     if (actor) {
       const toLabel = toZone.replace('_', ' ');
+      const cardNames = changes.map(c => c.card?.name ?? 'unknown');
       gameService.appendLog(room, playerId, 'zone_change',
-        `${actor.playerName} moved ${changes.length} card${changes.length !== 1 ? 's' : ''} to ${toLabel}`);
+        `${actor.playerName} moved ${cardNames.join(', ')} to ${toLabel}`);
     }
 
     room.lastActivity = ts();
@@ -677,23 +678,32 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
   });
 
   socket.on('library:scry:resolve', async ({
-    gameRoomId, playerId, keep, bottom,
-  }: { gameRoomId: string; playerId: string; keep: string[]; bottom: string[] }) => {
+    gameRoomId, playerId, keep, bottom, graveyard,
+  }: { gameRoomId: string; playerId: string; keep: string[]; bottom: string[]; graveyard?: string[] }) => {
     const room = await storage.loadGame(gameRoomId);
     if (!room || !room.players[playerId]) return;
     const player = room.players[playerId]!;
-    const scryCount = keep.length + bottom.length;
+    const gyIds = graveyard ?? [];
+    const scryCount = keep.length + bottom.length + gyIds.length;
     // remove top N from library
     player.libraryCardIds.splice(0, scryCount);
     // put kept cards back on top (in chosen order), then bottom cards
     player.libraryCardIds.unshift(...keep);
     player.libraryCardIds.push(...bottom);
+    // surveil: move graveyard cards to graveyard zone
+    for (const id of gyIds) {
+      player.graveyardCardIds.push(id);
+      if (room.cards[id]) room.cards[id]!.zone = 'graveyard';
+    }
+    const verb = gyIds.length > 0 ? 'surveilled' : 'scryed';
     gameService.appendLog(room, playerId, 'scry',
-      `${player.playerName} scryed ${scryCount}`);
+      `${player.playerName} ${verb} ${scryCount}`);
     room.lastActivity = ts();
     await storage.saveGame(room);
     io.to(ROOM(gameRoomId)).emit('game:delta', {
-      type: 'scry_resolved', playerId, log: room.actionLog.at(-1),
+      type: 'scry_resolved', playerId,
+      graveyard: gyIds,
+      log: room.actionLog.at(-1),
     });
   });
 

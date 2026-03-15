@@ -7,9 +7,10 @@ import { useState, type ReactNode } from 'react';
 import {
   ChevronRight, ArrowRight, CreditCard, Layers,
   RefreshCw, ToggleRight, ToggleLeft, Dices,
-  CircleDot, Plus, Upload,
+  CircleDot, Plus, Upload, Volume2, VolumeX,
 } from 'lucide-react';
 import { useGameTable } from '../../contexts/GameTableContext';
+import { isTTSEnabled, toggleTTS, isTTSSupported, speakPagas } from '../../utils/gameTTS';
 import DeckPickerModal from './DeckPickerModal';
 import TokenCreatorModal from './TokenCreatorModal';
 import DiceRollerModal from './DiceRollerModal';
@@ -111,6 +112,7 @@ export default function GameControls({ onConcede: _onConcede }: GameControlsProp
   const [showCoinFlip, setShowCoinFlip] = useState(false);
   const [showDrawX, setShowDrawX] = useState(false);
   const [drawXCount, setDrawXCount] = useState('');
+  const [ttsOn, setTtsOn] = useState(() => isTTSEnabled());
 
   const handleCreateToken = (template: TokenTemplate, count = 1) => {
     for (let i = 0; i < count; i++) {
@@ -270,6 +272,30 @@ export default function GameControls({ onConcede: _onConcede }: GameControlsProp
             className={amberBtn}
             isExpanded={isOpen}
           />
+
+          {/* ── Pagas el Precio? ─────────────────────────────────────── */}
+          {isTTSSupported() && (
+            <>
+              <SidebarItem
+                icon={<span className="text-sm leading-none shrink-0">💀</span>}
+                label="¿Pagas?"
+                shortcut="P"
+                onClick={speakPagas}
+                disabled={!ttsOn}
+                className={ttsOn ? amberBtn : disabledBtn}
+                isExpanded={isOpen}
+              />
+              <SidebarItem
+                icon={ttsOn ? <Volume2 className={iconSize} /> : <VolumeX className={iconSize} />}
+                label={ttsOn ? 'TTS On' : 'TTS Off'}
+                onClick={() => { const next = toggleTTS(); setTtsOn(next); }}
+                className={ttsOn
+                  ? `${btnBase} ${btnSizing} bg-green-500/15 hover:bg-green-500/25 border-green-500/40 text-green-300`
+                  : `${btnBase} ${btnSizing} bg-red-500/15 hover:bg-red-500/25 border-red-500/40 text-red-400`}
+                isExpanded={isOpen}
+              />
+            </>
+          )}
 
           {/* ── Divider ──────────────────────────────────────────────── */}
           <div className="border-t border-cyan-dim/20 my-0.5" />

@@ -175,7 +175,9 @@ function HandCard({
         onMouseEnter={() => {
           if (!isDragging) {
             setIsHovered(true);
-            hoverInspect({ name: card.name, imageUri: card.imageUri ?? null, instanceId: card.instanceId });
+            const hoverName = card.flipped && card.backName ? card.backName : card.name;
+            const hoverImg = card.flipped && card.backImageUri ? card.backImageUri : card.imageUri ?? null;
+            hoverInspect({ name: hoverName, imageUri: hoverImg, instanceId: card.instanceId });
           }
         }}
         onMouseLeave={() => {
@@ -186,15 +188,19 @@ function HandCard({
         onDragStart={e => e.preventDefault()}
       >
         <div className={`w-full h-full rounded-lg overflow-hidden border-2 shadow-neon-pink ${isSelected ? 'border-cyan' : 'border-cyan/50'}`}>
-          {card.imageUri ? (
-            <img
-              src={card.imageUri}
-              alt={card.name}
-              className="w-full h-full object-cover pointer-events-none"
-              draggable={false}
-              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-          ) : (
+          {(() => {
+            const displayUri = card.flipped && card.backImageUri ? card.backImageUri : card.imageUri;
+            return displayUri ? (
+              <img
+                src={displayUri}
+                alt={card.flipped && card.backName ? card.backName : card.name}
+                className="w-full h-full object-cover pointer-events-none"
+                draggable={false}
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : null;
+          })()}
+          {!((card.flipped && card.backImageUri) || card.imageUri) && (
             <div className="w-full h-full bg-navy-light flex items-center justify-center p-1">
               <span className="text-[9px] text-cream text-center leading-tight">{card.name}</span>
             </div>
@@ -203,6 +209,12 @@ function HandCard({
 
         {card.isCommander && (
           <div className="absolute -top-2 -right-2 bg-magenta rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow-md">★</div>
+        )}
+
+        {card.backImageUri && (
+          <div className="absolute bottom-1 right-1 bg-navy/90 text-amber-300 border border-amber-500/40 rounded-full w-4 h-4 flex items-center justify-center text-[8px] shadow-md pointer-events-none" title="Double-faced card">
+            ↻
+          </div>
         )}
 
         {card.revealed && (
@@ -230,18 +242,21 @@ function HandCard({
           style={{ left: dragPos.x - 40, top: dragPos.y - 56, width: 80, height: 112 }}
         >
           <div className="w-full h-full rounded-lg overflow-hidden border-2 border-cyan shadow-neon-pink-lg scale-110">
-            {card.imageUri ? (
-              <img
-                src={card.imageUri!}
-                alt={card.name}
-                className="w-full h-full object-cover"
-                draggable={false}
-              />
-            ) : (
-              <div className="w-full h-full bg-navy-light flex items-center justify-center p-1">
-                <span className="text-[9px] text-cream text-center">{card.name}</span>
-              </div>
-            )}
+            {(() => {
+              const ghostUri = card.flipped && card.backImageUri ? card.backImageUri : card.imageUri;
+              return ghostUri ? (
+                <img
+                  src={ghostUri}
+                  alt={card.flipped && card.backName ? card.backName : card.name}
+                  className="w-full h-full object-cover"
+                  draggable={false}
+                />
+              ) : (
+                <div className="w-full h-full bg-navy-light flex items-center justify-center p-1">
+                  <span className="text-[9px] text-cream text-center">{card.name}</span>
+                </div>
+              );
+            })()}
           </div>
           <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap">
             <span className="text-[10px] text-cyan bg-navy/80 px-2 py-0.5 rounded-full border border-cyan/40">

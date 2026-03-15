@@ -18,6 +18,7 @@ import type { DeckRecord } from '../types/deck';
 import type { BattlefieldCard } from '../types/game';
 import { deckRecordToSandboxImportPayload } from '../utils/deckArena';
 import { CardInspectorProvider } from '../components/game/CardInspectorPanel';
+import { speakPagas, isTTSSupported } from '../utils/gameTTS';
 
 interface GameTablePageProps {
   pendingDeck?: DeckRecord | null;
@@ -79,31 +80,66 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBa
       } else if (e.key === 'f') {
         e.preventDefault();
         setShowLibrarySearch(true);
+      } else if ((e.key === 'p' || e.key === 'P') && isTTSSupported()) {
+        e.preventDefault();
+        speakPagas();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [atTable, untapAll, drawCards, mulligan, shuffleLibrary, scryCards?.length ?? 0, isMyTurn, passTurn]);
 
-  // ── Ding sound when it becomes your turn ─────────────────────────────────
+  // ── Turn change sound + fading banner ────────────────────────────────────
   const prevIsMyTurnRef = useRef(false);
+  const [turnBanner, setTurnBanner] = useState<string | null>(null);
   useEffect(() => {
     if (atTable && isMyTurn && !prevIsMyTurnRef.current) {
+      // Play a pleasant two-tone chime (~1.2s total)
       try {
         const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.3);
+        const t = ctx.currentTime;
+        // First note
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.value = 660;
+        gain1.gain.setValueAtTime(0.25, t);
+        gain1.gain.exponentialRampToValueAtTime(0.08, t + 0.4);
+        gain1.gain.exponentialRampToValueAtTime(0.01, t + 0.6);
+        osc1.connect(gain1).connect(ctx.destination);
+        osc1.start(t);
+        osc1.stop(t + 0.6);
+        // Second note (higher, delayed)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.value = 880;
+        gain2.gain.setValueAtTime(0.0001, t);
+        gain2.gain.setValueAtTime(0.3, t + 0.3);
+        gain2.gain.exponentialRampToValueAtTime(0.01, t + 1.2);
+        osc2.connect(gain2).connect(ctx.destination);
+        osc2.start(t + 0.3);
+        osc2.stop(t + 1.2);
       } catch { /* ignore audio errors */ }
+      // Show "Your Turn" banner
+      setTurnBanner('Your Turn');
+    } else if (atTable && !isMyTurn && prevIsMyTurnRef.current && room) {
+      // Show who's turn it is now
+      const order = room.turnOrder?.length ? room.turnOrder : Object.keys(room.players);
+      const idx = room.activePlayerIndex ?? 0;
+      const activeId = order[idx % order.length];
+      const activeName = activeId ? room.players[activeId]?.playerName : null;
+      if (activeName) setTurnBanner(`${activeName}'s Turn`);
     }
     prevIsMyTurnRef.current = isMyTurn;
-  }, [isMyTurn, atTable]);
+  }, [isMyTurn, atTable, room]);
+
+  // Auto-dismiss turn banner after 5 seconds
+  useEffect(() => {
+    if (!turnBanner) return;
+    const timer = setTimeout(() => setTurnBanner(null), 5000);
+    return () => clearTimeout(timer);
+  }, [turnBanner]);
 
   useEffect(() => {
     if (!pendingDeck) {
@@ -151,7 +187,9 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBa
         onBack={onBack}
         onEnterTable={(sandbox) => {
           setAtTable(true);
-          setShowImportAfterJoin(!sandbox && !pendingDeck);
+          // Don't show import modal if player already has cards (rejoining)
+          const myCards = room ? Object.values(room.cards).filter(c => c.controller === playerId) : [];
+          setShowImportAfterJoin(!sandbox && !pendingDeck && myCards.length === 0);
         }}
       />
     );
@@ -216,16 +254,16 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBa
               <div className="flex items-center gap-2">
                 {isMyTurn ? (
                   <>
-                    <span className="text-orange-400 text-xs font-bold animate-pulse">Your Turn</span>
+                    <span className="text-magenta text-xs font-bold animate-pulse">Your Turn</span>
                     <button
                       onClick={passTurn}
-                      className="text-[11px] px-2.5 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/35 border border-orange-500/50 text-orange-300 hover:text-orange-200 font-semibold transition-all"
+                      className="text-[11px] px-2.5 py-1 rounded-lg bg-magenta/20 hover:bg-magenta/35 border border-magenta/50 text-magenta hover:text-pink-300 font-semibold transition-all"
                     >
                       Pass &rarr;
                     </button>
                   </>
                 ) : (
-                  <span className="text-cream-muted/60 text-xs">
+                  <span className="text-magenta/60 text-xs font-semibold">
                     {activeName}&apos;s Turn
                   </span>
                 )}
@@ -368,6 +406,26 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBa
           </div>
         )}
       </div>
+
+      {/* ── Turn banner — center of board, fades out ──────────────────── */}
+      {turnBanner && (
+        <div
+          className="fixed inset-0 z-30 flex items-center justify-center pointer-events-none"
+          style={{ animation: 'fadeInOut 5s ease forwards' }}
+        >
+          <div className="px-8 py-4 bg-navy/80 border border-cyan/40 rounded-2xl backdrop-blur-sm shadow-2xl">
+            <span className="text-3xl font-black text-cyan tracking-wide">{turnBanner}</span>
+          </div>
+        </div>
+      )}
+      <style>{`
+        @keyframes fadeInOut {
+          0% { opacity: 0; transform: scale(0.9); }
+          10% { opacity: 1; transform: scale(1); }
+          70% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
 
       {/* ── Targeting arrows — full-viewport overlay ──────────────────── */}
       <TargetingOverlay />
