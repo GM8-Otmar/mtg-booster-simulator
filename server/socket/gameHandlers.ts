@@ -8,6 +8,7 @@ const ROOM = (id: string) => `game:${id}`;
 
 function ts() { return new Date().toISOString(); }
 
+
 // Fisher-Yates shuffle in place
 function shuffle<T>(arr: T[]): void {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -52,6 +53,18 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     socket.leave(ROOM(gameRoomId));
   });
 
+  // ── State refresh (recovery from desync) ──────────────────────────────────
+
+  socket.on('game:request-state', async ({ gameRoomId, playerId }: { gameRoomId: string; playerId: string }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !room.players[playerId]) {
+      socket.emit('game:error', 'Room or player not found');
+      return;
+    }
+    console.log(`[MTG-SERVER] game:request-state — player=${room.players[playerId]!.playerName} (${playerId.slice(0, 8)}), room=${gameRoomId.slice(0, 8)}`);
+    socket.emit('game:state', gameService.sanitiseForPlayer(room, playerId));
+  });
+
   // ── Card movement (high-frequency during drag) ────────────────────────────
 
   socket.on('card:move', async ({
@@ -63,8 +76,8 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
       return;
     }
     const room = await storage.loadGame(gameRoomId);
-    if (!room || !room.cards[instanceId]) return;
-    if (room.cards[instanceId]!.controller !== playerId) return;
+    if (!room || !room.cards[instanceId]) { console.warn(`[MTG] card:move — room or card missing (room=${gameRoomId?.slice(0, 8)}, card=${instanceId?.slice(0, 8)})`); return; }
+    if (room.cards[instanceId]!.controller !== playerId) { console.warn(`[MTG] card:move — not controller`); return; }
     room.cards[instanceId]!.x = Math.max(0, Math.min(100, x));
     room.cards[instanceId]!.y = Math.max(0, Math.min(100, y));
     room.lastActivity = ts();
@@ -87,7 +100,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
 
     const player = room.players[card.controller];
     if (!player) { console.log(`[MTG-SERVER] card:zone — controller not found (${card.controller?.slice(0, 8)})`); return; }
-    if (card.controller !== playerId) return;
+    if (card.controller !== playerId) { console.warn(`[MTG] card:zone — playerId ${playerId?.slice(0, 8)} ≠ controller ${card.controller?.slice(0, 8)}`); return; }
 
     const fromZone = card.zone;
     const fromZoneKey = zoneKey(fromZone);
@@ -259,8 +272,8 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     gameRoomId, instanceId, tapped, playerId,
   }: { gameRoomId: string; instanceId: string; tapped: boolean; playerId: string }) => {
     const room = await storage.loadGame(gameRoomId);
-    if (!room || !room.cards[instanceId]) return;
-    if (room.cards[instanceId]!.controller !== playerId) return;
+    if (!room || !room.cards[instanceId]) { console.warn(`[MTG] card:tap — room or card missing`); return; }
+    if (room.cards[instanceId]!.controller !== playerId) { console.warn(`[MTG] card:tap — not controller`); return; }
     room.cards[instanceId]!.tapped = tapped;
     room.lastActivity = ts();
     await storage.saveGame(room);
@@ -271,7 +284,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     gameRoomId, instanceIds, tapped, playerId,
   }: { gameRoomId: string; instanceIds: string[]; tapped: boolean; playerId: string }) => {
     const room = await storage.loadGame(gameRoomId);
-    if (!room || !Array.isArray(instanceIds) || instanceIds.length === 0) return;
+    if (!room || !Array.isArray(instanceIds) || instanceIds.length === 0) { console.warn(`[MTG] cards:tap — room missing or empty list`); return; }
     const changed: string[] = [];
     for (const instanceId of instanceIds) {
       const card = room.cards[instanceId];
@@ -336,6 +349,47 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
       type: 'card_transform',
       instanceId,
       flipped: room.cards[instanceId]!.flipped,
+    });
+  });
+
+  // ── Attach / detach cards ─────────────────────────────────────────────────
+
+  socket.on('card:attach', async ({
+    gameRoomId, instanceId, targetId, playerId,
+  }: { gameRoomId: string; instanceId: string; targetId: string; playerId: string }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !room.cards[instanceId] || !room.cards[targetId]) return;
+    if (room.cards[instanceId]!.controller !== playerId) return;
+    if (room.cards[instanceId]!.zone !== 'battlefield' || room.cards[targetId]!.zone !== 'battlefield') return;
+    room.cards[instanceId]!.attachedTo = targetId;
+    // Count how many cards are already attached to this target (for vertical fanning)
+    const existingAttachments = Object.values(room.cards).filter(c => c.attachedTo === targetId && c.zone === 'battlefield').length;
+    // Position attached card relative to target, fanning upward
+    room.cards[instanceId]!.x = room.cards[targetId]!.x;
+    room.cards[instanceId]!.y = Math.max(2, room.cards[targetId]!.y - 6 * (existingAttachments + 1));
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', {
+      type: 'card_attached',
+      instanceId,
+      targetId,
+      x: room.cards[instanceId]!.x,
+      y: room.cards[instanceId]!.y,
+    });
+  });
+
+  socket.on('card:detach', async ({
+    gameRoomId, instanceId, playerId,
+  }: { gameRoomId: string; instanceId: string; playerId: string }) => {
+    const room = await storage.loadGame(gameRoomId);
+    if (!room || !room.cards[instanceId]) return;
+    if (room.cards[instanceId]!.controller !== playerId) return;
+    room.cards[instanceId]!.attachedTo = null;
+    room.lastActivity = ts();
+    await storage.saveGame(room);
+    io.to(ROOM(gameRoomId)).emit('game:delta', {
+      type: 'card_detached',
+      instanceId,
     });
   });
 

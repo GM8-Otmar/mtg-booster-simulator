@@ -294,7 +294,7 @@ export default function BattlefieldCard({
             ? `rotate(90deg)${effectiveDragging ? ' scale(1.08)' : ''}`
             : effectiveDragging ? 'scale(1.08)' : undefined,
           transition: effectiveDragging ? 'none' : 'left 0.08s ease, top 0.08s ease, transform 0.15s ease',
-          zIndex: effectiveDragging ? 50 : isShaking ? 40 : 10,
+          zIndex: effectiveDragging ? 50 : isShaking ? 40 : card.attachedTo ? 5 : 10,
           cursor: isTargetingMode ? 'crosshair' : effectiveDragging ? 'grabbing' : 'grab',
           boxShadow: effectiveDragging ? '0 0 20px rgba(255, 46, 136, 0.8)' : undefined,
           animation: isShaking ? 'card-shake 0.1s ease-in-out 6' : undefined,
@@ -332,6 +332,18 @@ export default function BattlefieldCard({
         {card.isCommander && (
           <div className="absolute -top-2 -right-2 bg-magenta rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow-md z-20">
             ★
+          </div>
+        )}
+
+        {card.attachedTo && (
+          <div
+            className="absolute -bottom-1 -right-1 bg-cyan/80 rounded-full w-4 h-4 flex items-center justify-center shadow-md z-20"
+            title="Attached"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
           </div>
         )}
 

@@ -43,6 +43,7 @@ export interface BattlefieldCard {
 
   isCommander: boolean;
   revealed?: boolean;
+  attachedTo?: string | null;  // instanceId of parent card (for auras/equipment)
 }
 
 export interface GamePlayerState {

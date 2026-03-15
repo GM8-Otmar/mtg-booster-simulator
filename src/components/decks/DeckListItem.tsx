@@ -83,13 +83,21 @@ export default function DeckListItem({
               })()}
             </div>
           )}
-          {/* Deck icon badge — top-right corner */}
+          {/* Deck tag + icon badge — top-right corner */}
           {(() => {
             const BadgeIcon = getDeckIcon(deck.icon);
-            if (!BadgeIcon) return null;
+            const tag = deck.tag;
+            if (!BadgeIcon && !tag) return null;
             return (
-              <div className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-magenta/20 border border-magenta/40 backdrop-blur-sm flex items-center justify-center">
-                <BadgeIcon size={16} className="text-magenta" />
+              <div className="absolute top-2 right-2 flex items-center gap-0 rounded-lg bg-magenta/20 border border-magenta/40 backdrop-blur-sm overflow-hidden">
+                {tag && (
+                  <span className="px-2 py-1 text-[11px] font-semibold text-white leading-none">{tag}</span>
+                )}
+                {BadgeIcon && (
+                  <div className={`w-8 h-8 flex items-center justify-center ${tag ? 'border-l border-magenta/40' : ''}`}>
+                    <BadgeIcon size={16} className="text-magenta" />
+                  </div>
+                )}
               </div>
             );
           })()}

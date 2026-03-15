@@ -37,13 +37,14 @@ function formatTime(iso: string): string {
 }
 
 export default function GameActionLog({ actions }: GameActionLogProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const { room } = useGameTable();
   const { hoverInspect, clearHoverInspect } = useCardInspector();
 
   // Auto-scroll to bottom on new actions
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [actions.length]);
 
   const cardByName = (name: string) => {
@@ -78,7 +79,7 @@ export default function GameActionLog({ actions }: GameActionLogProps) {
   return (
     <div className="flex flex-col h-full">
       <p className="text-[10px] uppercase tracking-widest text-cream-muted px-3 pt-2 pb-1">Action Log</p>
-      <div className="flex-1 overflow-y-auto px-3 pb-2 space-y-0.5">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 pb-2 space-y-0.5">
         {actions.length === 0 ? (
           <p className="text-cream-muted/40 text-xs italic">No actions yet…</p>
         ) : (
@@ -91,7 +92,6 @@ export default function GameActionLog({ actions }: GameActionLogProps) {
             </div>
           ))
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   );

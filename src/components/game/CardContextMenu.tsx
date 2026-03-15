@@ -26,6 +26,7 @@ interface MenuItem {
 export default function CardContextMenu({ card, x, y, onClose, selectedCards }: CardContextMenuProps) {
   const {
     changeZone, bulkChangeZone, tapCard, bulkTapCards, setFaceDown, transformCard,
+    attachCard, detachCard, startAttaching,
     addCounter, bulkAddCounter, resetCounters, notifyCommanderCast, setCommanderTax,
     createToken, revealCards, startTargeting, effectivePlayerId: playerId, myPlayer,
   } = useGameTable();
@@ -244,6 +245,16 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
       });
     }
 
+    // Transform (hand cards with DFC)
+    if (card.zone === 'hand' && card.backImageUri) {
+      sections.push({
+        items: [{
+          label: card.flipped ? 'Transform (front)' : 'Transform (back)',
+          action: () => do_(() => transformCard(card.instanceId)),
+        }],
+      });
+    }
+
     // Target (battlefield only)
     if (card.zone === 'battlefield') {
       sections.push({
@@ -254,6 +265,25 @@ export default function CardContextMenu({ card, x, y, onClose, selectedCards }: 
           },
         ],
       });
+    }
+
+    // Attach / detach (battlefield only)
+    if (card.zone === 'battlefield') {
+      if (card.attachedTo) {
+        sections.push({
+          items: [{
+            label: 'Detach',
+            action: () => do_(() => detachCard(card.instanceId)),
+          }],
+        });
+      } else {
+        sections.push({
+          items: [{
+            label: 'Attach to…',
+            action: () => do_(() => startAttaching(card.instanceId)),
+          }],
+        });
+      }
     }
 
     // Clone (battlefield only)

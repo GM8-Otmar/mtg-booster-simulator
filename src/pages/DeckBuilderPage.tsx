@@ -19,6 +19,7 @@ import {
   moveCardBetweenSections,
   renameDeck as renameDeckRecord,
   setDeckIcon,
+  setDeckTag,
   setFormat as setDeckFormat,
   setNotes as setDeckNotes,
   setCommander,
@@ -122,6 +123,14 @@ function BuilderContent({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
         }
         return next;
       });
+      // Persist fallback printings back to commander entries so cover art survives to the deck summary
+      for (const [name, printing] of results) {
+        if (!printing) continue;
+        const cmdEntry = deck.commander.find(e => e.cardName.toLowerCase() === name && !e.preferredPrinting);
+        if (cmdEntry) {
+          updateDeck(current => setPreferredPrinting(current, 'commander', cmdEntry.cardName, printing));
+        }
+      }
     });
 
     return () => {
@@ -439,6 +448,7 @@ function BuilderContent({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
             format={deck.format}
             notes={deck.notes}
             icon={deck.preferences.icon}
+            tag={deck.preferences.tag}
             commanderName={deck.commander[0]?.cardName ?? null}
             commanderImageUri={
               deck.commander[0]?.preferredPrinting?.imageUri ??
@@ -448,6 +458,7 @@ function BuilderContent({ deckId, onBack, onPlayDeck }: DeckBuilderPageProps) {
             onFormatChange={value => updateDeck(current => setDeckFormat(current, value))}
             onNotesChange={value => updateDeck(current => setDeckNotes(current, value))}
             onIconChange={value => updateDeck(current => setDeckIcon(current, value))}
+            onTagChange={value => updateDeck(current => setDeckTag(current, value))}
           />
           <div className="bg-navy-light rounded-xl border border-cyan-dim overflow-hidden">
             <div className="px-4 py-3 border-b border-cyan-dim">

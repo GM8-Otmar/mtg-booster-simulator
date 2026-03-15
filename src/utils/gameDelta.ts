@@ -18,10 +18,19 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
     case 'card_moved': {
       const card = room.cards[delta.instanceId];
       if (!card) return room;
-      return {
-        ...room,
-        cards: { ...room.cards, [delta.instanceId]: { ...card, x: delta.x, y: delta.y } },
+      const dx = delta.x - card.x;
+      const dy = delta.y - card.y;
+      const updatedCards: Record<string, BattlefieldCard> = {
+        ...room.cards,
+        [delta.instanceId]: { ...card, x: delta.x, y: delta.y },
       };
+      // Move attached cards with parent
+      for (const [cid, c] of Object.entries(room.cards)) {
+        if (c.attachedTo === delta.instanceId) {
+          updatedCards[cid] = { ...c, x: Math.max(2, Math.min(98, c.x + dx)), y: Math.max(2, Math.min(98, c.y + dy)) };
+        }
+      }
+      return { ...room, cards: updatedCards };
     }
 
     case 'zone_changed': {
@@ -35,11 +44,20 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
           useRevealed, baseCard: baseCard ? { name: baseCard.name, controller: baseCard.controller?.slice(0, 8) } : null });
       if (!baseCard) { console.warn('[MTG-delta] zone_changed: NO baseCard, skipping!'); return room; }
       const fromZone = delta.fromZone ?? baseCard.zone;
-      const newCard = { ...baseCard, zone: delta.toZone as GameZone };
+      const newCard = { ...baseCard, zone: delta.toZone as GameZone, attachedTo: delta.toZone === 'battlefield' ? baseCard.attachedTo : null };
       const players = reZonePlayer(room.players, baseCard.controller, delta.instanceId, fromZone, delta.toZone, delta.toIndex);
+      // Auto-detach any cards that were attached to this card if it left the battlefield
+      let updatedCards = { ...room.cards, [delta.instanceId]: newCard };
+      if (fromZone === 'battlefield' && delta.toZone !== 'battlefield') {
+        for (const [cid, card] of Object.entries(updatedCards)) {
+          if (card.attachedTo === delta.instanceId) {
+            updatedCards[cid] = { ...card, attachedTo: null };
+          }
+        }
+      }
       return {
         ...room,
-        cards: { ...room.cards, [delta.instanceId]: newCard },
+        cards: updatedCards,
         players,
         actionLog: appendLog(room.actionLog, delta.log),
       };
@@ -144,6 +162,24 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
       return {
         ...room,
         cards: { ...room.cards, [delta.instanceId]: { ...card, flipped: delta.flipped } },
+      };
+    }
+
+    case 'card_attached': {
+      const card = room.cards[delta.instanceId];
+      if (!card) return room;
+      return {
+        ...room,
+        cards: { ...room.cards, [delta.instanceId]: { ...card, attachedTo: delta.targetId, x: delta.x, y: delta.y } },
+      };
+    }
+
+    case 'card_detached': {
+      const card = room.cards[delta.instanceId];
+      if (!card) return room;
+      return {
+        ...room,
+        cards: { ...room.cards, [delta.instanceId]: { ...card, attachedTo: null } },
       };
     }
 
@@ -349,12 +385,27 @@ export function applyDelta(room: GameRoom, delta: any, myPlayerId: string | null
     case 'player_joined':
     case 'player_connected': {
       if (!delta.player) return room;
-      const newCards = delta.cards ? { ...room.cards, ...delta.cards } : room.cards;
-      const incomingCardCount = delta.cards ? Object.keys(delta.cards).length : 0;
-      console.log(`[MTG-delta] ${delta.type}: player=${delta.player.playerName} (${delta.player.playerId?.slice(0, 8)}), incoming cards=${incomingCardCount}, total cards after merge=${Object.keys(newCards).length}, turnOrder=`, delta.turnOrder);
+      const playerId = delta.player.playerId as string;
+      const incomingCards = delta.cards ?? {};
+      const incomingCardCount = Object.keys(incomingCards).length;
+
+      // Replace this player's known cards atomically. This keeps player_joined idempotent
+      // and prevents card explosion when re-join/import emits multiple player snapshots.
+      const newCards: Record<string, BattlefieldCard> = {};
+      for (const [id, card] of Object.entries(room.cards)) {
+        if (card.controller !== playerId) newCards[id] = card;
+      }
+      for (const [id, card] of Object.entries(incomingCards)) {
+        newCards[id] = card as BattlefieldCard;
+      }
+
+      console.log(
+        `[MTG-delta] ${delta.type}: player=${delta.player.playerName} (${playerId?.slice(0, 8)}), incoming cards=${incomingCardCount}, total cards after merge=${Object.keys(newCards).length}, turnOrder=`,
+        delta.turnOrder,
+      );
       return {
         ...room,
-        players: { ...room.players, [delta.player.playerId]: delta.player },
+        players: { ...room.players, [playerId]: delta.player },
         cards: newCards,
         turnOrder: delta.turnOrder ?? room.turnOrder,
         activePlayerIndex: delta.activePlayerIndex ?? room.activePlayerIndex,

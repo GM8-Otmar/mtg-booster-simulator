@@ -71,6 +71,19 @@ export async function joinGame(
   if (!room) throw new Error('Game not found');
   if (room.status === 'finished') throw new Error('Game is already finished');
 
+  // ── Rejoin: if a player with the same name already exists, return them ──
+  const existingEntry = Object.entries(room.players).find(
+    ([, p]) => p.playerName.toLowerCase() === playerName.toLowerCase(),
+  );
+  if (existingEntry) {
+    const [existingId] = existingEntry;
+    console.log(`[MTG-SERVER] joinGame — player "${playerName}" already exists (${existingId.slice(0, 8)}), rejoining`);
+    room.lastActivity = new Date().toISOString();
+    await storage.saveGame(room);
+    return { room, playerId: existingId };
+  }
+
+  // ── New player ──
   const playerId = uuidv4();
   room.players[playerId] = makePlayer(playerId, playerName, startingLife(room.format));
   room.lastActivity = new Date().toISOString();

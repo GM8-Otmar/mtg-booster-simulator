@@ -9,7 +9,7 @@ interface LibraryStackProps {
 }
 
 export default function LibraryStack({ count, playerId }: LibraryStackProps) {
-  const { drawCards, shuffleLibrary, scry, effectivePlayerId: myId } = useGameTable();
+  const { drawCards, shuffleLibrary, scry, bulkChangeZone, myPlayer, effectivePlayerId: myId } = useGameTable();
   const [showSearch, setShowSearch] = useState(false);
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const isOwner = playerId === myId;
@@ -64,6 +64,11 @@ export default function LibraryStack({ count, playerId }: LibraryStackProps) {
           onDraw={() => drawCards(1)}
           onFind={() => setShowSearch(true)}
           onScry={(n, mode) => scry(n, mode)}
+          onMill={(n, zone) => {
+            if (!myPlayer) return;
+            const topIds = myPlayer.libraryCardIds.slice(0, Math.min(n, myPlayer.libraryCardIds.length));
+            if (topIds.length > 0) bulkChangeZone(topIds, zone);
+          }}
           libraryCount={count}
         />
       )}

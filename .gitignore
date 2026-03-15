@@ -37,6 +37,9 @@ data/
 # Server build output
 dist-server/
 
+# Cloudflare tunnel (optional local binary)
+cloudflared.exe
+
 # wrangler files
 .wrangler
 .dev.vars*

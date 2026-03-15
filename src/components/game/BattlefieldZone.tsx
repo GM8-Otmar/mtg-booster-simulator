@@ -38,7 +38,7 @@ export default function BattlefieldZone({
 }: BattlefieldZoneProps) {
   const {
     bulkTapCards, bulkChangeZone, moveCard, changeZone, effectivePlayerId: playerId,
-    isTargetingMode, cancelTargeting,
+    isTargetingMode, cancelTargeting, isAttachingMode,
     shakeCards,
   } = useGameTable();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -77,6 +77,12 @@ export default function BattlefieldZone({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Reset marquee state if stuck
+        setMarquee(null);
+        setIsSelecting(false);
+        isMarqueeingRef.current = false;
+        marqueeStartRef.current = null;
+
         if (isTargetingModeRef.current) {
           cancelTargetingRef.current();
         } else {
@@ -178,9 +184,11 @@ export default function BattlefieldZone({
 
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
   }, [isSelecting]);
 
@@ -271,9 +279,11 @@ export default function BattlefieldZone({
 
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
       clearZoneHighlights();
     };
   }, [multiDrag, bulkChangeZone, moveCard]);
@@ -430,7 +440,7 @@ export default function BattlefieldZone({
           onPointerDown={e => e.stopPropagation()}
         >
           <span className="text-red-200 text-xs font-semibold animate-pulse">
-            Click a target card or player…
+            {isAttachingMode ? 'Click a card to attach to…' : 'Click a target card or player…'}
           </span>
           <button
             onClick={cancelTargeting}

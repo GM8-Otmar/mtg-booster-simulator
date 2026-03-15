@@ -9,9 +9,11 @@ export default defineConfig({
   server: {
     host: '0.0.0.0', // Listen on all network interfaces
     port: 5173,
-    allowedHosts: ['.ngrok-free.dev'],
+    allowedHosts: ['.ngrok-free.dev', '.trycloudflare.com'],
     hmr: {
-      // clientPort: 443, // Uncomment only when tunnelling through ngrok
+      // Use 443 + wss when using a tunnel (ngrok, Cloudflare, etc.)
+      clientPort: 443,
+      protocol: 'wss',
     },
     proxy: {
       '/api': {

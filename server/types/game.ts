@@ -40,6 +40,7 @@ export interface BattlefieldCard {
   // is this the player's designated commander?
   isCommander: boolean;
   revealed?: boolean;
+  attachedTo?: string | null;  // instanceId of parent card (for auras/equipment)
 }
 
 export interface GamePlayerState {

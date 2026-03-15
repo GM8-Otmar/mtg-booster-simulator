@@ -23,6 +23,7 @@ export function computeDeckSummary(deck: DeckRecord): DeckSummary {
     commanderNames: deck.commander.map(e => e.cardName),
     coverImageUri: commanderCover,
     icon: deck.preferences.icon ?? null,
+    tag: deck.preferences.tag ?? null,
     updatedAt: deck.updatedAt,
     lastPlayedAt: deck.lastPlayedAt,
   };
