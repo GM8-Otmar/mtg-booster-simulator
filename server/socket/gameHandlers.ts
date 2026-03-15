@@ -908,6 +908,12 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
     await storage.saveGame(room);
     io.to(ROOM(gameRoomId)).emit('game:delta', { type: 'message', log: room.actionLog.at(-1) });
   });
+
+  // ── TTS broadcast — relay phrase to all players in the room ──────────────
+  socket.on('game:tts', ({ gameRoomId, phraseKey, playerName }: { gameRoomId: string; phraseKey: string; playerName?: string }) => {
+    // Broadcast to everyone in the room INCLUDING the sender
+    io.to(ROOM(gameRoomId)).emit('game:tts', { phraseKey, playerName });
+  });
 }
 
 // helper — map GameZone → player array key

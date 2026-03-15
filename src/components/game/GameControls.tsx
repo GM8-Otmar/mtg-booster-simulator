@@ -10,7 +10,7 @@ import {
   CircleDot, Plus, Upload, Volume2, VolumeX,
 } from 'lucide-react';
 import { useGameTable } from '../../contexts/GameTableContext';
-import { isTTSEnabled, toggleTTS, isTTSSupported, speakPagas } from '../../utils/gameTTS';
+import { isTTSEnabled, toggleTTS, isTTSSupported } from '../../utils/gameTTS';
 import DeckPickerModal from './DeckPickerModal';
 import TokenCreatorModal from './TokenCreatorModal';
 import DiceRollerModal from './DiceRollerModal';
@@ -101,7 +101,7 @@ export default function GameControls({ onConcede: _onConcede }: GameControlsProp
   const {
     drawCards, untapAll, tapAll,
     mulligan, createToken, myLibraryCount,
-    passTurn, isMyTurn,
+    passTurn, isMyTurn, broadcastTTS,
   } = useGameTable();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -280,7 +280,7 @@ export default function GameControls({ onConcede: _onConcede }: GameControlsProp
                 icon={<span className="text-sm leading-none shrink-0">💀</span>}
                 label="¿Pagas?"
                 shortcut="P"
-                onClick={speakPagas}
+                onClick={() => broadcastTTS('pagas')}
                 disabled={!ttsOn}
                 className={ttsOn ? amberBtn : disabledBtn}
                 isExpanded={isOpen}

@@ -126,6 +126,7 @@ export interface GameTableContextType {
   // social
   concede: () => void;
   sendMessage: (text: string) => void;
+  broadcastTTS: (phraseKey: string) => void;
 
   // dice & coin
   rollDice: (faces: number, result: number) => void;
@@ -308,6 +309,11 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     sock.on('game:scry:reveal', ({ cards, instanceIds }: { cards: BattlefieldCard[]; instanceIds: string[] }) => {
       setScryCards(cards);
       setScryInstanceIds(instanceIds);
+    });
+
+    // TTS broadcast — another player triggered a phrase, play it locally
+    sock.on('game:tts', ({ phraseKey }: { phraseKey: string; playerName?: string }) => {
+      import('../utils/gameTTS').then(({ speakPhrase }) => speakPhrase(phraseKey));
     });
 
     return () => { sock.close(); };
@@ -956,6 +962,16 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
     emit('game:message', { text });
   }, [emit]);
 
+  const broadcastTTS = useCallback((phraseKey: string) => {
+    const roomId = gameRoomIdRef.current;
+    if (!roomId) {
+      // Sandbox — just play locally
+      import('../utils/gameTTS').then(({ speakPhrase }) => speakPhrase(phraseKey));
+      return;
+    }
+    socketRef.current?.emit('game:tts', { gameRoomId: roomId, phraseKey });
+  }, []);
+
   const rollDice = useCallback((faces: number, result: number) => {
     emit('game:dice-roll', { faces, result });
   }, [emit]);
@@ -1133,7 +1149,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
       passTurn, activePlayerId, isMyTurn,
       targetingArrows, isTargetingMode, startTargeting, cancelTargeting, completeTargeting, dismissArrow, clearAllArrows,
       isAttachingMode, startAttaching, cancelAttaching,
-      concede, sendMessage,
+      concede, sendMessage, broadcastTTS,
       rollDice,
       flipCoin,
     }}>

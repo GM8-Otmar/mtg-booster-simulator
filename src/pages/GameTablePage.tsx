@@ -18,7 +18,7 @@ import type { DeckRecord } from '../types/deck';
 import type { BattlefieldCard } from '../types/game';
 import { deckRecordToSandboxImportPayload } from '../utils/deckArena';
 import { CardInspectorProvider } from '../components/game/CardInspectorPanel';
-import { speakPagas, isTTSSupported } from '../utils/gameTTS';
+import { isTTSSupported } from '../utils/gameTTS';
 
 interface GameTablePageProps {
   pendingDeck?: DeckRecord | null;
@@ -36,7 +36,7 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBa
     concede, connected, gameRoomId, isSandbox,
     activeSandboxPlayerId, setActiveSandboxPlayer,
     passTurn, isMyTurn,
-    importDeck,
+    importDeck, broadcastTTS,
   } = useGameTable();
 
   const [atTable, setAtTable] = useState(false);
@@ -82,7 +82,7 @@ export default function GameTablePage({ pendingDeck, onPendingDeckConsumed, onBa
         setShowLibrarySearch(true);
       } else if ((e.key === 'p' || e.key === 'P') && isTTSSupported()) {
         e.preventDefault();
-        speakPagas();
+        broadcastTTS('pagas');
       }
     };
     window.addEventListener('keydown', handler);
