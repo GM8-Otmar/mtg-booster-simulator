@@ -36,6 +36,44 @@ const PHRASES: TTSPhrase[] = [
   },
 ];
 
+// ── Voice cache (Chrome loads voices asynchronously) ─────────────────────────
+
+let cachedVoices: SpeechSynthesisVoice[] = [];
+
+function loadVoices(): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  cachedVoices = window.speechSynthesis.getVoices();
+  if (cachedVoices.length === 0) {
+    window.speechSynthesis.addEventListener('voiceschanged', () => {
+      cachedVoices = window.speechSynthesis.getVoices();
+    }, { once: true });
+  }
+}
+
+loadVoices();
+
+// ── Warm up speech synthesis with user gesture ──────────────────────────────
+// Chrome blocks speechSynthesis.speak() unless a user gesture has previously
+// triggered it. We prime it silently on the first click/keydown so that
+// socket-driven TTS events can play audio without being blocked.
+
+let warmedUp = false;
+
+function warmUpTTS(): void {
+  if (warmedUp || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  warmedUp = true;
+  const u = new SpeechSynthesisUtterance('');
+  u.volume = 0;
+  window.speechSynthesis.speak(u);
+  window.removeEventListener('click', warmUpTTS);
+  window.removeEventListener('keydown', warmUpTTS);
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('click', warmUpTTS);
+  window.addEventListener('keydown', warmUpTTS);
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /** Check whether TTS is enabled (persisted in localStorage). */
@@ -75,21 +113,27 @@ export function speakPhrase(key: string): void {
   const phrase = PHRASES.find(p => p.key === key);
   if (!phrase) return;
 
-  // Cancel any in-progress speech to avoid overlap
+  // Cancel any in-progress speech, then schedule the new one after a tick.
+  // Chrome has a bug where cancel() + speak() in the same tick can silently fail.
   window.speechSynthesis.cancel();
 
-  const utterance = new SpeechSynthesisUtterance(phrase.text);
-  utterance.lang = phrase.lang ?? 'es-ES';
-  utterance.rate = phrase.rate ?? 1;
-  utterance.pitch = phrase.pitch ?? 1;
+  setTimeout(() => {
+    const utterance = new SpeechSynthesisUtterance(phrase.text);
+    utterance.lang = phrase.lang ?? 'es-ES';
+    utterance.rate = phrase.rate ?? 1;
+    utterance.pitch = phrase.pitch ?? 1;
 
-  // Try to pick a voice matching the language
-  const voices = window.speechSynthesis.getVoices();
-  const langPrefix = (phrase.lang ?? 'es').split('-')[0]!;
-  const match = voices.find(v => v.lang.startsWith(langPrefix));
-  if (match) utterance.voice = match;
+    // Use cached voices (pre-loaded on module init)
+    const langPrefix = (phrase.lang ?? 'es').split('-')[0]!;
+    const match = cachedVoices.find(v => v.lang.startsWith(langPrefix));
+    if (match) utterance.voice = match;
 
-  window.speechSynthesis.speak(utterance);
+    utterance.onerror = (e) => {
+      if (e.error !== 'interrupted') console.warn('[TTS] Speech error:', e.error);
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }, 50);
 }
 
 /** Convenience: speak the "pagas el precio?" phrase. */

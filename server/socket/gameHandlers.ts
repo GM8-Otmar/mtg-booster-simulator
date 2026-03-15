@@ -911,6 +911,7 @@ export function registerGameHandlers(io: SocketIOServer, socket: Socket): void {
 
   // ── TTS broadcast — relay phrase to all players in the room ──────────────
   socket.on('game:tts', ({ gameRoomId, phraseKey, playerName }: { gameRoomId: string; phraseKey: string; playerName?: string }) => {
+    console.log(`[TTS] Broadcasting phrase "${phraseKey}" to room ${gameRoomId} from ${playerName ?? 'unknown'}`);
     // Broadcast to everyone in the room INCLUDING the sender
     io.to(ROOM(gameRoomId)).emit('game:tts', { phraseKey, playerName });
   });

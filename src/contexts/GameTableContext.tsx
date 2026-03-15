@@ -313,7 +313,11 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
 
     // TTS broadcast — another player triggered a phrase, play it locally
     sock.on('game:tts', ({ phraseKey }: { phraseKey: string; playerName?: string }) => {
-      import('../utils/gameTTS').then(({ speakPhrase }) => speakPhrase(phraseKey));
+      console.log('[MTG] game:tts received, phraseKey=', phraseKey);
+      import('../utils/gameTTS').then(({ speakPhrase }) => {
+        console.log('[MTG] speaking phrase:', phraseKey);
+        speakPhrase(phraseKey);
+      });
     });
 
     return () => { sock.close(); };
@@ -964,6 +968,7 @@ export function GameTableProvider({ children }: { children: React.ReactNode }) {
 
   const broadcastTTS = useCallback((phraseKey: string) => {
     const roomId = gameRoomIdRef.current;
+    console.log('[MTG] broadcastTTS called, phraseKey=', phraseKey, 'roomId=', roomId, 'socket=', !!socketRef.current);
     if (!roomId) {
       // Sandbox — just play locally
       import('../utils/gameTTS').then(({ speakPhrase }) => speakPhrase(phraseKey));
